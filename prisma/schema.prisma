@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -12,4 +6,61 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model polls {
+  id                    Int                      @id
+  question              String
+  published             Boolean                  @default(false)
+  active                Boolean                  @default(false)
+  guild_id              BigInt
+  choices               String[]
+  votes                 Int[]
+  time                  DateTime?                @db.Timestamptz(6)
+  duration              String?                  // Interval processed as string
+  num                   Int?
+  message_id            BigInt?
+  crosspost_message_ids BigInt[]
+  tag                   Int?
+  image                 String?
+  description           String?
+  thread_question       String?
+  show_question         Boolean                  @default(true)
+  show_options          Boolean                  @default(true)
+  show_voting           Boolean                  @default(true)
+  fallback              Boolean                  @default(false)
+}
+
+model pollsinfo {
+  guild_id            BigInt   @id
+  default_channel_id  BigInt
+  manage_channel_id   BigInt[]
+  manager_role_id     BigInt[]
+  default_colour      Int?
+  fallback_channel_id BigInt?
+}
+
+model pollstags {
+  tag                     Int      @id
+  name                    String
+  guild_id                BigInt
+  channel_id              BigInt
+  crosspost_channels      BigInt[]
+  crosspost_servers       BigInt[]
+  current_num             Int?
+  colour                  Int?
+  end_message             String?
+  end_message_latest_ids  BigInt[]
+  end_message_replace     Boolean  @default(false)
+  end_message_role_ids    BigInt[]
+  end_message_ping        Boolean  @default(false)
+  end_message_self_assign Boolean  @default(false)
+  persistent              Boolean  @default(true)
+}
+
+model pollsvotes {
+  id      BigInt @id(map: "pollsvotesnew_pkey")
+  user_id BigInt
+  poll_id Int
+  choice  Int
 }

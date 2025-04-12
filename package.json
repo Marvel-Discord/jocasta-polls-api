@@ -3,8 +3,20 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon --exec tsx src/index.ts --devmode",
+    "clean": "if exist node_modules rmdir /s /q node_modules && if exist build rmdir /s /q build || exit 0",
+    "start": "node build/index.js",
+    "build": "tsc",
+    "postinstall": "prisma generate",
+    "format": "prettier --check --cache . --ignore-path ../../.gitignore",
+    "format:fix": "prettier --write --cache . --ignore-path ../../.gitignore",
+    "lint": "biome check --formatter-enabled=false .",
+    "lint:fix": "biome check --formatter-enabled=false --apply .",
+    "check": "pnpm format && pnpm lint",
+    "check:fix": "pnpm format:fix && pnpm lint:fix"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +37,8 @@
     "@typescript-eslint/parser": "^8.29.1",
     "eslint": "^9.24.0",
     "eslint-plugin-prisma": "^1.0.1",
+    "nodemon": "^3.1.9",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.3"
   }
 }
