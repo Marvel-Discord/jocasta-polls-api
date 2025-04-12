@@ -15,9 +15,8 @@ export const pollRouter = Router();
 pollRouter.get("/", async (req, res) => {
 	try {
 		const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
-		const { published, tag, userId, notVoted } = await parsePollFilterParams(
-			req.query as unknown as PollFilterParams,
-		);
+		const { published, tag, userId, notVoted, search } =
+			await parsePollFilterParams(req.query as unknown as PollFilterParams);
 
 		const polls = await getPolls({
 			guildId: guildId,
@@ -29,6 +28,7 @@ pollRouter.get("/", async (req, res) => {
 						notVoted: notVoted,
 					}
 				: undefined,
+			search,
 		});
 
 		res.status(200).json(polls);

@@ -6,6 +6,7 @@ interface PollFilters {
 	published?: boolean;
 	tag?: number;
 	user?: PollFilterUser;
+	search?: string;
 }
 
 export interface PollFilterUser {
@@ -18,9 +19,9 @@ export async function getPolls({
 	published = true,
 	tag,
 	user,
+	search,
 }: PollFilters): Promise<Poll[]> {
-	console.log(user);
-
+	console.log(search);
 	const polls = await prisma.polls.findMany({
 		where: {
 			published: published,
@@ -37,6 +38,33 @@ export async function getPolls({
 							: {
 									some: { user_id: user.userId },
 								},
+					}
+				: {}),
+
+			...(search
+				? {
+						OR: [
+							{
+								question: {
+									search: search,
+								},
+							},
+							{
+								description: {
+									search: search,
+								},
+							},
+							{
+								thread_question: {
+									search: search,
+								},
+							},
+							{
+								choices: {
+									has: search,
+								},
+							},
+						],
 					}
 				: {}),
 		},

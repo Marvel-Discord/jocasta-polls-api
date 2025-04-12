@@ -10,15 +10,21 @@ const PollIdParamModel = z.object({
 	pollId: z.coerce.number().int().positive(),
 });
 
-export const PollFilterParamsModel = z.object({
-	published: z.coerce.boolean().optional(),
-	tag: z.coerce.number().int().positive().optional(),
-	userId: z.coerce.bigint().positive().optional(),
-	notVoted: z.coerce
-		.boolean()
-		.transform(() => true)
-		.optional(),
-});
+export const PollFilterParamsModel = z
+	.object({
+		published: z.coerce.boolean().optional(),
+		tag: z.coerce.number().int().positive().optional(),
+		userId: z.coerce.bigint().positive().optional(),
+		notVoted: z.coerce
+			.boolean()
+			.transform(() => true)
+			.optional(),
+		search: z.coerce.string().optional(),
+	})
+	.refine((data) => !(data.notVoted && !data.userId), {
+		message: "'notVoted' requires 'userId' to be specified",
+		path: ["notVoted"],
+	});
 
 export interface GuildIdParams {
 	guildId: string;
@@ -59,6 +65,7 @@ export interface PollFilterParams {
 	tag?: number;
 	userId?: bigint;
 	notVoted?: boolean;
+	search?: string;
 }
 
 export async function parsePollFilterParams(
