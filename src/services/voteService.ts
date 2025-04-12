@@ -17,14 +17,23 @@ export async function getVote(
 	return vote;
 }
 
-export async function getVotesByPoll(pollId: number): Promise<Vote[]> {
-	const votes = await prisma.pollsvotes.findMany({
+export async function getVotesByPoll(
+	pollId: number,
+): Promise<{ choice: number; votes: number }[]> {
+	const votes = await prisma.pollsvotes.groupBy({
+		by: ["choice"],
 		where: {
 			poll_id: pollId,
 		},
+		_count: {
+			choice: true,
+		},
 	});
 
-	return votes;
+	return votes.map((vote) => ({
+		choice: vote.choice,
+		votes: vote._count.choice,
+	}));
 }
 
 export async function getVotesByUser(userId: bigint): Promise<Vote[]> {
