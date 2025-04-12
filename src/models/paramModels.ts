@@ -1,5 +1,6 @@
 import { BadRequestError } from "@/errors";
 import type { Poll } from "@/types/poll";
+import type { Tag } from "@/types/tag";
 import { z } from "zod";
 
 const GuildIdParamModel = z.object({
@@ -8,6 +9,10 @@ const GuildIdParamModel = z.object({
 
 const PollIdParamModel = z.object({
 	pollId: z.coerce.number().int().positive(),
+});
+
+const TagIdParamModel = z.object({
+	id: z.coerce.number().int().positive(),
 });
 
 export const PollFilterParamsModel = z
@@ -80,4 +85,20 @@ export async function parsePollFilterParams(
 	}
 
 	return result.data;
+}
+
+export interface TagIdParams {
+	id: string;
+}
+
+export async function parseTagId(params: TagIdParams): Promise<Tag["tag"]> {
+	const result = await TagIdParamModel.safeParseAsync(params);
+	if (!result.success) {
+		throw new BadRequestError(
+			`${params.id} is not a valid tag id`,
+			result.error.issues,
+		);
+	}
+
+	return result.data.id;
 }

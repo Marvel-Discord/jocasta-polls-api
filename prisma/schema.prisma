@@ -32,6 +32,7 @@ model polls {
   fallback              Boolean                  @default(false)
 
   votesRelation         pollsvotes[]             @relation("PollVotes")
+  tagRelation           pollstags?               @relation("PollstagsToPolls", fields: [tag], references: [tag])
 }
 
 model pollsinfo {
@@ -59,6 +60,8 @@ model pollstags {
   end_message_ping        Boolean  @default(false)
   end_message_self_assign Boolean  @default(false)
   persistent              Boolean  @default(true)
+  
+  pollsRelation           polls[]  @relation("PollstagsToPolls")
 }
 
 model pollsvotes {
