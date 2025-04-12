@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -17,7 +17,7 @@ model polls {
   choices               String[]
   votes                 Int[]
   time                  DateTime?                @db.Timestamptz(6)
-  duration              String?                  // Interval processed as string
+// duration              Interval?               // not supported in Prisma yet
   num                   Int?
   message_id            BigInt?
   crosspost_message_ids BigInt[]
