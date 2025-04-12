@@ -29,6 +29,8 @@ model polls {
   show_options          Boolean                  @default(true)
   show_voting           Boolean                  @default(true)
   fallback              Boolean                  @default(false)
+
+  votesRelation         pollsvotes[]             @relation("PollVotes")
 }
 
 model pollsinfo {
@@ -63,4 +65,6 @@ model pollsvotes {
   user_id BigInt
   poll_id Int
   choice  Int
+  
+  poll      polls      @relation("PollVotes", fields: [poll_id], references: [id])
 }

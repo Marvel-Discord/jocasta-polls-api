@@ -2,7 +2,9 @@ import { ApiError, NotFoundError } from "@/errors";
 import {
 	type GuildIdParams,
 	parseGuildId,
+	parsePollFilterParams,
 	parsePollId,
+	type PollFilterParams,
 	type PollIdParams,
 } from "@/models/paramModels";
 import { getPollById, getPolls } from "@/services/pollService";
@@ -10,10 +12,25 @@ import { Router } from "express";
 
 export const pollRouter = Router();
 
-pollRouter.get("/guild/:guildId", async (req, res) => {
+pollRouter.get("/", async (req, res) => {
 	try {
-		const guildId = await parseGuildId(req.params as GuildIdParams);
-		const polls = await getPolls({ guildId: guildId });
+		const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
+		const { published, tag, userId, notVoted } = await parsePollFilterParams(
+			req.query as unknown as PollFilterParams,
+		);
+
+		const polls = await getPolls({
+			guildId: guildId,
+			published,
+			tag,
+			user: userId
+				? {
+						userId: userId,
+						notVoted: notVoted,
+					}
+				: undefined,
+		});
+
 		res.status(200).json(polls);
 	} catch (error) {
 		ApiError.sendError(res, error);
