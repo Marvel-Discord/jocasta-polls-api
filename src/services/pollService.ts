@@ -21,7 +21,8 @@ export async function getPolls({
 	user,
 	search,
 }: PollFilters): Promise<Poll[]> {
-	console.log(search);
+	const safeSearch = search ? safeTsQuery(search) : undefined;
+
 	const polls = await prisma.polls.findMany({
 		where: {
 			published: published,
@@ -46,22 +47,17 @@ export async function getPolls({
 						OR: [
 							{
 								question: {
-									search: search,
+									search: safeSearch,
 								},
 							},
 							{
 								description: {
-									search: search,
-								},
-							},
-							{
-								thread_question: {
-									search: search,
+									search: safeSearch,
 								},
 							},
 							{
 								choices: {
-									has: search,
+									has: safeSearch,
 								},
 							},
 						],
@@ -87,4 +83,18 @@ export async function getPollById(id: number): Promise<Poll | null> {
 	if (!poll) return null;
 
 	return poll;
+}
+
+function safeTsQuery(input: string): string {
+	// Escape the special characters so they can be used safely
+	const escapedInput = input
+		.toLowerCase()
+		.replace(/([&|!()"'`])/g, "\\$1") // Escape special characters
+		.replace(/\s+/g, " ") // Normalize whitespace (e.g., multiple spaces)
+		.trim()
+		.split(" ")
+		.filter(Boolean) // Remove empty strings
+		.join(" & "); // Join with 'AND' logic
+
+	return escapedInput;
 }
