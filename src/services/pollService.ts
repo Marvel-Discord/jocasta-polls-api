@@ -24,7 +24,7 @@ export async function getPolls({
 		},
 	});
 
-	return polls.map((poll: Poll) => formatPoll(poll));
+	return polls;
 }
 
 export async function getPollById(id: number): Promise<Poll | null> {
@@ -36,16 +36,5 @@ export async function getPollById(id: number): Promise<Poll | null> {
 
 	if (!poll) return null;
 
-	return formatPoll(poll);
-}
-
-function formatPoll(poll: Poll): Poll {
-	return {
-		...poll,
-		guild_id: BigInt(poll.guild_id),
-		message_id: poll.message_id !== null ? BigInt(poll.message_id) : null,
-		crosspost_message_ids: poll.crosspost_message_ids.map((id: bigint) =>
-			BigInt(id),
-		),
-	};
+	return poll;
 }
