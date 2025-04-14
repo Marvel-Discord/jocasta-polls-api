@@ -25,6 +25,11 @@ pollRouter.get("/", async (req, res) => {
 		const { published, tag, userId, notVoted, search } =
 			await parsePollFilterParams(req.query as unknown as PollFilterParams);
 
+		if (published === false) {
+			// TODO: Add permission check for unpublished polls
+			throw new ApiError("Unpublished polls are not available", 403);
+		}
+
 		const polls = await getPolls({
 			guildId: guildId,
 			published,

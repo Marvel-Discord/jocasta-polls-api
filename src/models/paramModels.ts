@@ -20,15 +20,21 @@ const UserIdParamModel = z.object({
 	userId: z.coerce.bigint().positive(),
 });
 
+const BooleanFilter = z
+	.string()
+	.toLowerCase()
+	.refine((val) => val === "true" || val === "false", {
+		message: "Must be 'true' or 'false'",
+	})
+	.transform((val) => (val ? val === "true" : undefined))
+	.optional();
+
 export const PollFilterParamsModel = z
 	.object({
-		published: z.coerce.boolean().optional(),
+		published: BooleanFilter,
 		tag: z.coerce.number().int().positive().optional(),
 		userId: z.coerce.bigint().positive().optional(),
-		notVoted: z.coerce
-			.boolean()
-			.transform(() => true)
-			.optional(),
+		notVoted: BooleanFilter,
 		search: z.coerce.string().optional(),
 	})
 	.refine((data) => !(data.notVoted && !data.userId), {
