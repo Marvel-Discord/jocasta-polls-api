@@ -4,22 +4,6 @@ import type { Tag } from "@/types/tag";
 import type { Vote } from "@/types/vote";
 import { z } from "zod";
 
-const GuildIdParamModel = z.object({
-	guildId: z.coerce.number().int().positive(),
-});
-
-const PollIdParamModel = z.object({
-	pollId: z.coerce.number().int().positive(),
-});
-
-const TagIdParamModel = z.object({
-	id: z.coerce.number().int().positive(),
-});
-
-const UserIdParamModel = z.object({
-	userId: z.coerce.bigint().positive(),
-});
-
 const BooleanFilter = z
 	.string()
 	.toLowerCase()
@@ -29,13 +13,39 @@ const BooleanFilter = z
 	.transform((val) => (val ? val === "true" : undefined))
 	.optional();
 
-export const PollFilterParamsModel = z
+const IntFilter = z.coerce.number().int().positive();
+
+const BigIntFilter = z.coerce.bigint().positive();
+
+const GuildIdParamModel = z.object({
+	guildId: IntFilter,
+});
+
+const PollIdParamModel = z.object({
+	pollId: IntFilter,
+});
+
+const TagIdParamModel = z.object({
+	id: IntFilter,
+});
+
+const UserIdParamModel = z.object({
+	userId: BigIntFilter,
+});
+
+const PaginationModel = z.object({
+	page: IntFilter.optional(),
+	limit: IntFilter.optional(),
+});
+
+const PollFilterParamsModel = z
 	.object({
 		published: BooleanFilter,
-		tag: z.coerce.number().int().positive().optional(),
-		userId: z.coerce.bigint().positive().optional(),
+		tag: IntFilter.optional(),
+		userId: BigIntFilter.optional(),
 		notVoted: BooleanFilter,
 		search: z.coerce.string().optional(),
+		...PaginationModel.shape,
 	})
 	.refine((data) => !(data.notVoted && !data.userId), {
 		message: "'notVoted' requires 'userId' to be specified",
@@ -82,12 +92,16 @@ export interface PollFilterParams {
 	userId?: bigint;
 	notVoted?: boolean;
 	search?: string;
+
+	page?: number;
+	limit?: number;
 }
 
 export async function parsePollFilterParams(
 	params: PollFilterParams,
 ): Promise<PollFilterParams> {
 	const result = await PollFilterParamsModel.safeParseAsync(params);
+
 	if (!result.success) {
 		throw new BadRequestError(
 			"Invalid poll filter parameters",

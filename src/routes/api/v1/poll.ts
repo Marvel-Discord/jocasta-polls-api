@@ -22,7 +22,7 @@ export const pollRouter = Router();
 pollRouter.get("/", async (req, res) => {
 	try {
 		const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
-		const { published, tag, userId, notVoted, search } =
+		const { published, tag, userId, notVoted, search, page, limit } =
 			await parsePollFilterParams(req.query as unknown as PollFilterParams);
 
 		if (published === false) {
@@ -30,7 +30,7 @@ pollRouter.get("/", async (req, res) => {
 			throw new ApiError("Unpublished polls are not available", 403);
 		}
 
-		const polls = await getPolls({
+		const { data: polls, total } = await getPolls({
 			guildId: guildId,
 			published,
 			tag,
@@ -41,6 +41,8 @@ pollRouter.get("/", async (req, res) => {
 					}
 				: undefined,
 			search,
+			page,
+			limit,
 		});
 
 		res.status(200).json(polls);

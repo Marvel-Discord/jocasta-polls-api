@@ -7,6 +7,9 @@ interface PollFilters {
 	tag?: number;
 	user?: PollFilterUser;
 	search?: string;
+
+	page?: number;
+	limit?: number;
 }
 
 export interface PollFilterUser {
@@ -20,57 +23,51 @@ export async function getPolls({
 	tag,
 	user,
 	search,
-}: PollFilters): Promise<Poll[]> {
+	page = 1,
+	limit = 10,
+}: PollFilters): Promise<{ data: Poll[]; total: number }> {
 	const safeSearch = search ? safeTsQuery(search) : undefined;
 
-	const polls = await prisma.polls.findMany({
-		where: {
-			published: published,
-			guild_id: guildId,
+	const filters = {
+		published,
+		guild_id: guildId,
 
-			...(tag !== undefined ? { tag: tag } : {}),
+		...(tag !== undefined ? { tag } : {}),
 
-			...(user
-				? {
-						votesRelation: user.notVoted
-							? {
-									none: { user_id: user.userId },
-								}
-							: {
-									some: { user_id: user.userId },
-								},
-					}
-				: {}),
+		...(user
+			? {
+					votesRelation: user.notVoted
+						? { none: { user_id: user.userId } }
+						: { some: { user_id: user.userId } },
+				}
+			: {}),
 
-			...(search
-				? {
-						OR: [
-							{
-								question: {
-									search: safeSearch,
-								},
-							},
-							{
-								description: {
-									search: safeSearch,
-								},
-							},
-							{
-								choices: {
-									has: safeSearch,
-								},
-							},
-						],
-					}
-				: {}),
-		},
-		take: 10,
-		orderBy: {
-			time: "desc",
-		},
-	});
+		...(search
+			? {
+					OR: [
+						{ question: { search: safeSearch } },
+						{ description: { search: safeSearch } },
+						{ choices: { has: safeSearch } },
+					],
+				}
+			: {}),
+	};
 
-	return polls;
+	const [data, total] = await Promise.all([
+		prisma.polls.findMany({
+			where: filters,
+			take: limit,
+			skip: (page - 1) * limit,
+			orderBy: {
+				time: "desc",
+			},
+		}),
+		prisma.polls.count({
+			where: filters,
+		}),
+	]);
+
+	return { data, total };
 }
 
 export async function getPollById(id: number): Promise<Poll | null> {
