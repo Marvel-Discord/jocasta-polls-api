@@ -1,4 +1,5 @@
 import { prisma } from "@/client";
+import type { Meta } from "@/types/meta";
 import type { Poll } from "@/types/poll";
 
 interface PollFilters {
@@ -25,7 +26,7 @@ export async function getPolls({
 	search,
 	page = 1,
 	limit = 10,
-}: PollFilters): Promise<{ data: Poll[]; total: number }> {
+}: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
 	const safeSearch = search ? safeTsQuery(search) : undefined;
 
 	const filters = {
@@ -67,7 +68,16 @@ export async function getPolls({
 		}),
 	]);
 
-	return { data, total };
+	const meta: Meta = {
+		total,
+		page,
+		limit,
+		totalPages: Math.ceil(total / limit),
+		nextPage: page < Math.ceil(total / limit) ? page + 1 : null,
+		prevPage: page > 1 ? page - 1 : null,
+	};
+
+	return { data, meta };
 }
 
 export async function getPollById(id: number): Promise<Poll | null> {

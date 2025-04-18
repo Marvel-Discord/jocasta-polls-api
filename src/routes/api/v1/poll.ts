@@ -30,7 +30,7 @@ pollRouter.get("/", async (req, res) => {
 			throw new ApiError("Unpublished polls are not available", 403);
 		}
 
-		const { data: polls, total } = await getPolls({
+		const { data, meta } = await getPolls({
 			guildId: guildId,
 			published,
 			tag,
@@ -45,7 +45,25 @@ pollRouter.get("/", async (req, res) => {
 			limit,
 		});
 
-		res.status(200).json(polls);
+		const query = { ...req.query };
+
+		const makePageUrl = (pageNum: number | null) =>
+			pageNum
+				? `${req.protocol}://${req.get("host")}${req.path}?${new URLSearchParams(
+						{
+							...query,
+							page: pageNum.toString(),
+						},
+					).toString()}`
+				: undefined;
+
+		meta.nextPageUrl = makePageUrl(meta.nextPage);
+		meta.prevPageUrl = makePageUrl(meta.prevPage);
+
+		res.status(200).json({
+			data,
+			meta,
+		});
 	} catch (error) {
 		ApiError.sendError(res, error);
 	}
