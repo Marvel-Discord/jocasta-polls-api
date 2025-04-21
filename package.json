@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "type": "module",
-  "types": "src/types/index.d.ts",
+  "types": "src/types/index.ts",
   "files": [
     "src/types"
   ],
