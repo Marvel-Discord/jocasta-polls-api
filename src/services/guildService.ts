@@ -1,5 +1,5 @@
 import { prisma } from "@/client";
-import type { PollInfo } from "@/types/pollinfo";
+import type { PollInfo } from "@/types";
 
 export async function getGuilds(): Promise<PollInfo[]> {
 	const guilds = await prisma.pollsinfo.findMany();

@@ -1,6 +1,5 @@
 import { prisma } from "@/client";
-import type { Meta } from "@/types/meta";
-import type { Poll } from "@/types/poll";
+import type { Meta, Poll } from "@/types";
 
 interface PollFilters {
 	guildId: bigint;

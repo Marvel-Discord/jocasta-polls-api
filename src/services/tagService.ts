@@ -1,5 +1,5 @@
 import { prisma } from "@/client";
-import type { Tag } from "@/types/tag";
+import type { Tag } from "@/types";
 
 export async function getTags(publishedOnly = false): Promise<Tag[]> {
 	const tags = await prisma.pollstags.findMany({

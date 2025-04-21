@@ -1,5 +1,5 @@
 import { prisma } from "@/client";
-import type { Vote } from "@/types/vote";
+import type { Vote } from "@/types";
 
 export async function getVote(
 	pollId: number,

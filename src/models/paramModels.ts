@@ -1,7 +1,5 @@
 import { BadRequestError } from "@/errors";
-import type { Poll } from "@/types/poll";
-import type { Tag } from "@/types/tag";
-import type { Vote } from "@/types/vote";
+import type { Poll, Tag, Vote } from "@/types";
 import { z } from "zod";
 
 const BooleanFilter = z
