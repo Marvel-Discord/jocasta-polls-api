@@ -13,7 +13,7 @@
     "dev": "nodemon --exec tsx src/index.ts --devmode",
     "clean": "if exist node_modules rmdir /s /q node_modules && if exist build rmdir /s /q build || exit 0",
     "build": "tsc",
-    "start": "tsx src/index.js",
+    "start": "tsx src/index.ts",
     "postinstall": "prisma generate",
     "format": "prettier --check --cache . --ignore-path ../../.gitignore",
     "format:fix": "prettier --write --cache . --ignore-path ../../.gitignore",
