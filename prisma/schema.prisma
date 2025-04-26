@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../../node_modules/.prisma/client"
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 datasource db {
@@ -17,11 +18,11 @@ model polls {
   choices               String[]
   votes                 Int[]
   time                  DateTime?                @db.Timestamptz(6)
-  duration              String?                  // Interval processed as string
+// duration              Interval?               // not supported in Prisma yet
   num                   Int?
   message_id            BigInt?
   crosspost_message_ids BigInt[]
-  tag                   Int?
+  tag                   Int
   image                 String?
   description           String?
   thread_question       String?
@@ -29,6 +30,9 @@ model polls {
   show_options          Boolean                  @default(true)
   show_voting           Boolean                  @default(true)
   fallback              Boolean                  @default(false)
+
+  votesRelation         pollsvotes[]             @relation("PollVotes")
+  tagRelation           pollstags?               @relation("PollstagsToPolls", fields: [tag], references: [tag])
 }
 
 model pollsinfo {
@@ -56,6 +60,8 @@ model pollstags {
   end_message_ping        Boolean  @default(false)
   end_message_self_assign Boolean  @default(false)
   persistent              Boolean  @default(true)
+  
+  pollsRelation           polls[]  @relation("PollstagsToPolls")
 }
 
 model pollsvotes {
@@ -63,4 +69,6 @@ model pollsvotes {
   user_id BigInt
   poll_id Int
   choice  Int
+  
+  poll      polls      @relation("PollVotes", fields: [poll_id], references: [id])
 }

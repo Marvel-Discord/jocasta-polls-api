@@ -20,7 +20,7 @@ export function createApp() {
 
 	const server = createServer(app);
 
-	server.listen(config.api.port, () => {
+	server.listen(config.api.port, "0.0.0.0", () => {
 		console.log(`⚡[server]: Server is running on port ${config.api.port}`);
 	});
 
