@@ -11,7 +11,7 @@ export interface Poll {
 	num: number | null;
 	message_id: bigint | null;
 	crosspost_message_ids: bigint[];
-	tag: number | null;
+	tag: number;
 	image: string | null;
 	description: string | null;
 	thread_question: string | null;
