@@ -1,5 +1,6 @@
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
+import { Prisma } from "@prisma/client";
 
 interface PollFilters {
 	guildId: bigint;
@@ -45,8 +46,18 @@ export async function getPolls({
 		...(search
 			? {
 					OR: [
-						{ question: { search: safeSearch } },
-						{ description: { search: safeSearch } },
+						{
+							question: {
+								contains: safeSearch,
+								mode: Prisma.QueryMode.insensitive,
+							},
+						},
+						{
+							description: {
+								contains: safeSearch,
+								mode: Prisma.QueryMode.insensitive,
+							},
+						},
 						{ choices: { has: safeSearch } },
 					],
 				}
@@ -100,7 +111,7 @@ function safeTsQuery(input: string): string {
 		.trim()
 		.split(" ")
 		.filter(Boolean) // Remove empty strings
-		.join(" & "); // Join with 'AND' logic
+		.join(" "); // Join with 'AND' logic
 
 	return escapedInput;
 }
