@@ -24,7 +24,7 @@ export async function getTags(publishedOnly = false): Promise<Tag[]> {
 		return bTime - aTime;
 	});
 
-	return tags.map(({ pollsRelation, ...tag }) => tag);
+	return tags;
 }
 
 export async function getTagById(id: number): Promise<Tag | null> {
