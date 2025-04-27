@@ -9,9 +9,26 @@ export function createApp() {
 	const app = express();
 
 	const corsOptions = {
-		origin: config.frontendUrl,
+		origin: (
+			origin: string | undefined,
+			callback: (error: Error | null, allow: boolean) => void,
+		) => {
+			if (!origin) {
+				callback(null, true);
+			} else if (
+				origin === config.frontendUrl ||
+				(config.frontendUrlDev &&
+					origin &&
+					new RegExp(config.frontendUrlDev).test(origin))
+			) {
+				callback(null, true);
+			} else {
+				callback(new Error("Not allowed by CORS"), false);
+			}
+		},
 		credentials: true,
 	};
+
 	app.use(cors(corsOptions));
 
 	app.use(express.json());
