@@ -1,6 +1,6 @@
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
-import { Prisma } from "@prisma/client";
+import { type polls, Prisma } from "@prisma/client";
 
 interface PollFilters {
 	guildId: bigint;
@@ -65,14 +65,24 @@ export async function getPolls({
 	};
 
 	const [data, total] = await Promise.all([
-		prisma.polls.findMany({
-			where: filters,
-			take: limit,
-			skip: (page - 1) * limit,
-			orderBy: {
-				time: "desc",
-			},
-		}),
+		prisma.polls
+			.findMany({
+				where: filters,
+				take: limit,
+				skip: (page - 1) * limit,
+				orderBy: {
+					time: "desc",
+				},
+				include: {
+					votesRelation: {
+						select: {
+							choice: true,
+						},
+					},
+				},
+			})
+			.then((polls) => polls.map((poll) => tallyVotes(poll))),
+
 		prisma.polls.count({
 			where: filters,
 		}),
@@ -95,11 +105,33 @@ export async function getPollById(id: number): Promise<Poll | null> {
 		where: {
 			id,
 		},
+		include: {
+			votesRelation: {
+				select: {
+					choice: true,
+				},
+			},
+		},
 	});
 
 	if (!poll) return null;
 
-	return poll;
+	return tallyVotes(poll);
+}
+
+function tallyVotes(
+	poll: polls & { votesRelation: { choice: number }[] },
+): Poll {
+	const { votesRelation, ...restPoll } = poll;
+	const voteTally = new Array(poll.choices.length).fill(0);
+	for (const vote of poll.votesRelation) {
+		voteTally[vote.choice] = (voteTally[vote.choice] || 0) + 1;
+	}
+
+	return {
+		...restPoll,
+		votes: voteTally,
+	};
 }
 
 function safeTsQuery(input: string): string {

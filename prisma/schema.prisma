@@ -16,7 +16,6 @@ model polls {
   active                Boolean                  @default(false)
   guild_id              BigInt
   choices               String[]
-  votes                 Int[]
   time                  DateTime?                @db.Timestamptz(6)
 // duration              Interval?               // not supported in Prisma yet
   num                   Int?
