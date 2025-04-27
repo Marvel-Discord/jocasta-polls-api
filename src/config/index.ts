@@ -21,6 +21,9 @@ const config = {
 		port: Number(process.env.PORT || 8000),
 	},
 	frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+	frontendUrlDev: new RegExp(
+		process.env.FRONTEND_URL_DEV || "http://localhost:3001",
+	),
 	// having a random secret would mess with persistent sessions
 	expressSessionSecret:
 		process.env.EXPRESS_SESSION_SECRET || "change the secret in production",
