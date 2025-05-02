@@ -4,9 +4,12 @@ import express from "express";
 import { apiRouter } from "@/routes";
 import config from "@/config";
 import { createServer } from "node:http";
+import { initializeAuth } from "@/auth/passport";
 
 export function createApp() {
 	const app = express();
+
+	initializeAuth(app);
 
 	const corsOptions = {
 		origin: (
@@ -15,12 +18,7 @@ export function createApp() {
 		) => {
 			if (!origin) {
 				callback(null, true);
-			} else if (
-				origin === config.frontendUrl ||
-				(config.frontendUrlDev &&
-					origin &&
-					new RegExp(config.frontendUrlDev).test(origin))
-			) {
+			} else if (origin === config.frontendUrl) {
 				callback(null, true);
 			} else {
 				callback(new Error("Not allowed by CORS"), false);
