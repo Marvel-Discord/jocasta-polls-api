@@ -11,9 +11,15 @@ authRouter.get(
 	"/callback",
 	passport.authenticate("discord", { failureRedirect: "/" }),
 	async (req, res) => {
-		const discordProfile = req.user as DiscordUserProfile;
-		console.log(discordProfile);
-
 		res.redirect(`${config.frontendUrl}/polls`);
 	},
 );
+
+authRouter.get("/me", (req, res) => {
+	if (req.isAuthenticated()) {
+		const discordProfile = req.user as DiscordUserProfile;
+		res.json(discordProfile);
+	} else {
+		res.status(401).json({ message: "Unauthorized" });
+	}
+});
