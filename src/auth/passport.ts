@@ -20,7 +20,6 @@ const discordStrategy = new DiscordStrategy(
 
 export function initializeAuth(app: Express) {
 	passport.serializeUser((user, done) => {
-		console.log("serializeUser", user);
 		done(null, user);
 	});
 
@@ -36,10 +35,10 @@ export function initializeAuth(app: Express) {
 		session({
 			secret: config.expressSessionSecret,
 			resave: false,
-			saveUninitialized: true,
+			saveUninitialized: false,
 			cookie: {
 				httpOnly: true,
-				sameSite: isProduction ? "lax" : "none",
+				sameSite: "lax",
 				secure: isProduction,
 			},
 		}),

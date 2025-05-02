@@ -9,16 +9,12 @@ import { initializeAuth } from "@/auth/passport";
 export function createApp() {
 	const app = express();
 
-	initializeAuth(app);
-
 	const corsOptions = {
 		origin: (
 			origin: string | undefined,
 			callback: (error: Error | null, allow: boolean) => void,
 		) => {
-			if (!origin) {
-				callback(null, true);
-			} else if (origin === config.frontendUrl) {
+			if (!origin || origin === config.frontendUrl) {
 				callback(null, true);
 			} else {
 				callback(new Error("Not allowed by CORS"), false);
@@ -31,6 +27,10 @@ export function createApp() {
 
 	app.use(express.json());
 	app.use(express.urlencoded({ extended: false }));
+	app.set("trust proxy", 1);
+
+	initializeAuth(app);
+
 	app.use(apiRouter);
 
 	const server = createServer(app);

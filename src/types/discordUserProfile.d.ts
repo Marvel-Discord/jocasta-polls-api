@@ -7,6 +7,7 @@ export interface DiscordUserProfile {
 		id: string;
 		name: string;
 	}[];
+	accessToken: string;
 }
 
 // The following is the full type of the DiscordUserProfile object returned by passport-discord
