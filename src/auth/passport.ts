@@ -38,7 +38,7 @@ export function initializeAuth(app: Express) {
 			saveUninitialized: false,
 			cookie: {
 				httpOnly: true,
-				sameSite: "lax",
+				sameSite: isProduction ? "none" : "lax", // TODO: switch to 'lax' in production
 				secure: isProduction,
 			},
 		}),
