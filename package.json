@@ -12,7 +12,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --exec tsx src/index.ts --devmode",
     "clean": "if exist node_modules rmdir /s /q node_modules && if exist build rmdir /s /q build || exit 0",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "tsx src/index.ts",
     "postinstall": "prisma generate",
     "format": "prettier --check --cache . --ignore-path ../../.gitignore",
