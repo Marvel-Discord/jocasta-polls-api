@@ -15,6 +15,15 @@ authRouter.get(
 	},
 );
 
+authRouter.post("/logout", (req, res) => {
+	req.logout((err) => {
+		if (err) {
+			return res.status(500).json({ message: "Logout failed" });
+		}
+		res.status(200).json({ message: "Logged out successfully" });
+	});
+});
+
 authRouter.get("/me", (req, res) => {
 	if (req.isAuthenticated()) {
 		const discordProfile = req.user as DiscordUserProfile;
