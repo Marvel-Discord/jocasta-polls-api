@@ -5,7 +5,7 @@ export interface Poll {
 	active: boolean;
 	guild_id: bigint;
 	choices: string[];
-	votes: number[];
+	votes: number[]?;
 	time: Date | null;
 	// duration: string | null;
 	num: number | null;
