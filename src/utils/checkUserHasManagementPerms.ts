@@ -21,6 +21,8 @@ export async function checkUserHasManagementPerms(
       }
     );
 
+    console.log(response);
+
     if (!response.ok) return false;
 
     const member = await response.json();

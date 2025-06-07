@@ -26,10 +26,13 @@ pollRouter.get("/", async (req, res) => {
     const { published, tag, userId, notVoted, search, page, limit } =
       await parsePollFilterParams(req.query as unknown as PollFilterParams);
 
-    const hasManagementPerms = await attachManagementPermsFlag(req);
+    let hasManagementPerms = false;
 
-    if (published === false && hasManagementPerms) {
-      throw new ApiError("You cannot view unpublished polls", 403);
+    if (published === false) {
+      hasManagementPerms = await attachManagementPermsFlag(req);
+      if (!hasManagementPerms) {
+        throw new ApiError("You cannot view unpublished polls", 403);
+      }
     }
 
     const { data, meta } = await getPolls({
