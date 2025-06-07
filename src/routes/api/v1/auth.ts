@@ -1,5 +1,6 @@
 import config from "@/config";
 import type { DiscordUserProfile } from "@/types";
+import { attachManagementPermsFlag } from "@/utils/checkUserHasManagementPerms";
 import { Router } from "express";
 import passport from "passport";
 
@@ -24,9 +25,13 @@ authRouter.post("/logout", (req, res) => {
   });
 });
 
-authRouter.get("/me", (req, res) => {
+authRouter.get("/me", async (req, res) => {
   if (req.isAuthenticated()) {
     const discordProfile = req.user as DiscordUserProfile;
+
+    const isManager = await attachManagementPermsFlag(req);
+    discordProfile.isManager = isManager;
+
     res.json(discordProfile);
   } else {
     res.status(401).json({ message: "Unauthorized" });

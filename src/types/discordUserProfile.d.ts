@@ -1,4 +1,4 @@
-export interface DiscordUserProfile extends Discord.PassportProfile {
+export interface DiscordUserProfile {
   id: string;
   username: string;
   avatar?: string;
@@ -8,6 +8,7 @@ export interface DiscordUserProfile extends Discord.PassportProfile {
     name: string;
   }[];
   accessToken?: string;
+  isManager?: boolean;
 }
 
 // The following is the full type of the DiscordUserProfile object returned by passport-discord
