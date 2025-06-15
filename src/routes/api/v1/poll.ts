@@ -1,13 +1,16 @@
-import { ApiError, NotFoundError } from "@/errors";
+import { ApiError, BadRequestError, NotFoundError } from "@/errors";
+import { requireAuth } from "@/middleware/requireAuth";
 import {
   type GuildIdParams,
   parseGuildId,
   parsePollFilterParams,
   parsePollId,
   parseUserId,
+  parseChoice,
   type PollFilterParams,
   type PollIdParams,
   type UserIdParams,
+  VoteParams,
 } from "@/models/paramModels";
 import { getPollById, getPolls } from "@/services/pollService";
 import {
@@ -15,7 +18,7 @@ import {
   getVotesByPoll,
   getVotesByUser,
 } from "@/services/voteService";
-import { attachManagementPermsFlag } from "@/utils/checkUserHasManagementPerms";
+import { attachManagementPermsFlag } from "@/utils/checkDiscordMembership";
 import { Router } from "express";
 
 export const pollRouter = Router();
@@ -111,6 +114,31 @@ pollRouter.get("/:pollId/votes/:userId", async (req, res) => {
       throw new NotFoundError(`Vote not found for user ${userId}`);
     }
     res.status(200).json(vote);
+  } catch (error) {
+    ApiError.sendError(res, error);
+  }
+});
+
+pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
+  try {
+    const pollId = await parsePollId(req.params as unknown as PollIdParams);
+    const userId = await parseUserId(req.body as UserIdParams);
+    const choice = await parseChoice(req.body as VoteParams);
+
+    const poll = await getPollById(pollId, false);
+    if (!poll) {
+      throw new NotFoundError(`Poll with id ${pollId} not found`);
+    }
+    if (choice && choice >= poll.choices.length) {
+      throw new BadRequestError(`${choice} is not a valid choice`);
+    }
+
+    console.log(
+      `User ${userId} is voting for choice ${choice} in poll ${pollId}`
+    );
+    // TODO: Update vote in DB here
+
+    res.status(201).json({ message: "Vote cast successfully" });
   } catch (error) {
     ApiError.sendError(res, error);
   }

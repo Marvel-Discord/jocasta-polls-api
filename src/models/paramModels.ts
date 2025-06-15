@@ -31,6 +31,10 @@ const UserIdParamModel = z.object({
   userId: BigIntFilter,
 });
 
+const ChoiceParamModel = z.object({
+  choice: z.coerce.number().int().min(0).max(7).nullable(),
+});
+
 const PaginationModel = z.object({
   page: IntFilter.optional(),
   limit: IntFilter.optional(),
@@ -142,4 +146,22 @@ export async function parseUserId(
   }
 
   return result.data.userId;
+}
+
+export interface VoteParams {
+  choice: string;
+}
+
+export async function parseChoice(
+  params: VoteParams
+): Promise<Vote["choice"] | null> {
+  const result = await ChoiceParamModel.safeParseAsync(params);
+  if (!result.success) {
+    throw new BadRequestError(
+      `${params.choice} is not a valid choice`,
+      result.error.issues
+    );
+  }
+
+  return result.data.choice;
 }

@@ -1,9 +1,11 @@
 import config from "@/config";
 import { DiscordUserProfile } from "@/types";
-import { checkUserHasManagementPerms } from "@/utils/checkUserHasManagementPerms";
-import { checkUserInServer } from "@/utils/checkUserInServer";
+import {
+  checkUserHasManagementPerms,
+  checkUserInServer,
+} from "@/utils/checkDiscordMembership";
 
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, RequestHandler } from "express";
 
 async function validateAuthAndServerMembership(
   req: Request,
@@ -26,36 +28,28 @@ async function validateAuthAndServerMembership(
   return user;
 }
 
-export async function requireAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+export const requireAuth: RequestHandler = async (req, res, next) => {
   const user = await validateAuthAndServerMembership(req, res, config.guildId);
   if (!user) return;
   next();
-}
+};
 
-function requireManagementPermsForGuild(guildId: bigint) {
-  return async (req: Request, res: Response, next: NextFunction) => {
+function requireManagementPermsForGuild(guildId: bigint): RequestHandler {
+  return async (req, res, next) => {
     const user = await validateAuthAndServerMembership(req, res, guildId);
     if (!user) return;
 
     const hasPerms = await checkUserHasManagementPerms(user, guildId);
     if (!hasPerms) {
-      return res
+      res
         .status(403)
         .json({ message: "Forbidden: Missing management permissions" });
+      return;
     }
 
     next();
   };
 }
 
-export function requireManagementPerms(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  return requireManagementPermsForGuild(config.guildId)(req, res, next);
-}
+export const requireManagementPerms: RequestHandler =
+  requireManagementPermsForGuild(config.guildId);

@@ -1,6 +1,6 @@
 import config from "@/config";
 import type { DiscordUserProfile } from "@/types";
-import { attachManagementPermsFlag } from "@/utils/checkUserHasManagementPerms";
+import { attachManagementPermsFlag } from "@/utils/checkDiscordMembership";
 import { Router } from "express";
 import passport from "passport";
 
