@@ -30,6 +30,7 @@ const config = {
       clientId: requiredEnv("DISCORD_CLIENT_ID"),
       clientSecret: requiredEnv("DISCORD_CLIENT_SECRET"),
       redirectUri: requiredEnv("DISCORD_REDIRECT_URI"),
+      botToken: requiredEnv("DISCORD_BOT_TOKEN"),
     },
   },
 } as const;
