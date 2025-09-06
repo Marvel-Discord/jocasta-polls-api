@@ -137,6 +137,26 @@ export async function getPollById(
   return tallyVotes(poll);
 }
 
+export async function getPollsFromList(
+  pollIds: number[],
+  managementOverride: boolean = false
+): Promise<Poll[]> {
+  const polls = await prisma.polls.findMany({
+    where: {
+      id: { in: pollIds },
+    },
+    include: {
+      votesRelation: {
+        select: {
+          choice: true,
+        },
+      },
+    },
+  });
+
+  return polls.map((poll) => (managementOverride ? tallyVotes(poll) : { ...poll, votes: null }));
+}
+
 function tallyVotes(
   poll: polls & { votesRelation: { choice: number }[] }
 ): Poll {
