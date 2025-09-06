@@ -23,13 +23,26 @@ interface DiscordGuildMember {
 
 interface DiscordRole {
   id: string;
+  name: string;
   permissions: string;
+  color: number;
+  position: number;
+  hoist: boolean;
+  managed: boolean;
 }
 
 interface FormattedChannel {
   id: string;
   name: string;
   position: number;
+}
+
+interface FormattedRole {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+  permissions: string;
 }
 
 // Cache for Discord channels
@@ -54,6 +67,32 @@ export function setCachedChannels(
   // 5 minutes
   channelCache.set(guildId, {
     channels,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+// Cache for Discord roles
+const roleCache = new Map<
+  string,
+  { roles: FormattedRole[]; expiresAt: number }
+>();
+
+export function getCachedRoles(guildId: string): FormattedRole[] | null {
+  const cached = roleCache.get(guildId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.roles;
+  }
+  return null;
+}
+
+export function setCachedRoles(
+  guildId: string,
+  roles: FormattedRole[],
+  ttlMs: number = 300000
+) {
+  // 5 minutes
+  roleCache.set(guildId, {
+    roles,
     expiresAt: Date.now() + ttlMs,
   });
 }
@@ -259,5 +298,63 @@ export async function fetchGuildChannels(
       throw error;
     }
     throw new ApiError("Failed to fetch Discord channels", 500);
+  }
+}
+
+export async function fetchGuildRoles(
+  guildId: string
+): Promise<FormattedRole[]> {
+  // Check cache first
+  const cached = getCachedRoles(guildId);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${guildId}/roles`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bot ${config.auth.discord.botToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new ApiError("Bot missing permissions or not in server", 403);
+      }
+      if (response.status === 404) {
+        throw new ApiError("Guild not found", 404);
+      }
+      if (response.status === 429) {
+        throw new ApiError("Rate limited by Discord API", 429);
+      }
+      throw new ApiError(`Discord API error: ${response.status}`, 500);
+    }
+
+    const roles: DiscordRole[] = await response.json();
+    const formattedRoles: FormattedRole[] = roles
+      .filter((role) => !role.managed) // Exclude bot/integration roles
+      .map((role) => ({
+        id: role.id,
+        name: role.name,
+        color: role.color,
+        position: role.position,
+        permissions: role.permissions,
+      }))
+      .sort((a, b) => b.position - a.position); // Sort by position (highest first)
+
+    // Cache the results
+    setCachedRoles(guildId, formattedRoles);
+
+    return formattedRoles;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError("Failed to fetch Discord roles", 500);
   }
 }
