@@ -138,12 +138,6 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
     if (!poll) {
       throw new NotFoundError(`Poll with id ${pollId} not found`);
     }
-    if (choice === null || choice === undefined) {
-      throw new BadRequestError("Choice is required");
-    }
-    if (choice >= poll.choices.length) {
-      throw new BadRequestError(`${choice} is not a valid choice`);
-    }
 
     // Check if user already has a vote for this poll
     const existingVote = await prisma.pollsvotes.findFirst({
@@ -152,6 +146,27 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
         poll_id: pollId,
       },
     });
+
+    // If choice is null/undefined, delete the vote
+    if (choice === null || choice === undefined) {
+      if (existingVote) {
+        await prisma.pollsvotes.deleteMany({
+          where: {
+            user_id: BigInt(userId),
+            poll_id: pollId,
+          },
+        });
+        res.status(200).json({ message: "Vote deleted successfully" });
+      } else {
+        res.status(200).json({ message: "No vote to delete" });
+      }
+      return;
+    }
+
+    // Validate choice for non-null votes
+    if (choice >= poll.choices.length) {
+      throw new BadRequestError(`${choice} is not a valid choice`);
+    }
 
     if (existingVote) {
       // Update existing vote
