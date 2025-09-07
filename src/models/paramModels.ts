@@ -16,7 +16,7 @@ const IntFilter = z.coerce.number().int().positive();
 const BigIntFilter = z.coerce.bigint().positive();
 
 const GuildIdParamModel = z.object({
-  guildId: IntFilter,
+  guildId: BigIntFilter,
 });
 
 const PollIdParamModel = z.object({

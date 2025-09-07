@@ -2,6 +2,7 @@ import { Router } from "express";
 import { fetchGuildChannels, fetchGuildRoles } from "@/services/discordService";
 import { parseGuildId } from "@/models/paramModels";
 import { ApiError } from "@/errors";
+import config from "@/config";
 
 export const discordRouter = Router();
 
@@ -10,7 +11,7 @@ discordRouter.get("/guilds/:guildId/channels", async (req, res, next) => {
     const guildId = await parseGuildId(req.params);
 
     // Only allow access to our specific guild
-    if (guildId !== BigInt("281648235557421056")) {
+    if (guildId !== BigInt(config.guildId)) {
       throw new ApiError("Guild not supported", 403);
     }
 
@@ -27,7 +28,7 @@ discordRouter.get("/guilds/:guildId/roles", async (req, res, next) => {
     const guildId = await parseGuildId(req.params);
 
     // Only allow access to our specific guild
-    if (guildId !== BigInt("281648235557421056")) {
+    if (guildId !== BigInt(config.guildId)) {
       throw new ApiError("Guild not supported", 403);
     }
 
