@@ -18,12 +18,22 @@ tagRouter.get("/", async (req, res) => {
 
 tagRouter.get("/:tagId", async (req, res) => {
   try {
-    const tagId = await parseTagId(req.query as unknown as TagIdParams);
+    const tagId = await parseTagId(req.params as unknown as TagIdParams);
     const tag = await getTagById(tagId);
     if (!tag) {
       throw new ApiError(`Tag with id ${tagId} not found`, 404);
     }
     res.status(200).json(tag);
+  } catch (error) {
+    ApiError.sendError(res, error);
+  }
+});
+
+tagRouter.post("/create", async (req, res) => {
+  try {
+    // TODO: Implement tag creation logic here
+    console.log("Creating tags:", req.body);
+    res.status(201).json({ message: "Tags created successfully" });
   } catch (error) {
     ApiError.sendError(res, error);
   }
