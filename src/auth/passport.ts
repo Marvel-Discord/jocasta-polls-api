@@ -5,9 +5,8 @@ import { Strategy as DiscordStrategy } from "passport-discord";
 import session from "express-session";
 import type { DiscordUserProfile } from "@/types/discordUserProfile";
 import { createClient } from "redis";
-import FileStore from "session-file-store";
+import MemoryStore from "memorystore";
 import type { Store } from "express-session";
-import path from "path";
 
 // Import RedisStore with proper typing
 let RedisStore: any;
@@ -59,13 +58,13 @@ async function createSessionStore(): Promise<Store> {
     }
   }
 
-  // Fallback to file-based session store
-  const SessionFileStore = FileStore(session);
-  console.log("Using file-based session storage");
-  return new SessionFileStore({
-    path: path.join(process.cwd(), "temp", "sessions"),
-    ttl: 7 * 24 * 60 * 60, // 7 days in seconds
-    retries: 0,
+  // Fallback to memory-based session store (Windows-friendly)
+  const MemoryStoreSession = MemoryStore(session);
+  console.log("Using memory-based session storage with TTL");
+  return new MemoryStoreSession({
+    checkPeriod: 86400000, // prune expired entries every 24h
+    ttl: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    max: 1000, // max number of sessions
   });
 }
 
