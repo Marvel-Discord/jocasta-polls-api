@@ -1,4 +1,5 @@
 import config from "@/config";
+import { prisma } from "@/client";
 import { ApiError, BadRequestError, NotFoundError } from "@/errors";
 import { requireAuth, requireManagementPerms } from "@/middleware/requireAuth";
 import {
@@ -137,14 +138,47 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
     if (!poll) {
       throw new NotFoundError(`Poll with id ${pollId} not found`);
     }
-    if (choice && choice >= poll.choices.length) {
+    if (choice === null || choice === undefined) {
+      throw new BadRequestError("Choice is required");
+    }
+    if (choice >= poll.choices.length) {
       throw new BadRequestError(`${choice} is not a valid choice`);
     }
 
-    console.log(
-      `User ${userId} is voting for choice ${choice} in poll ${pollId}`
-    );
-    // TODO: Update vote in DB here
+    // Check if user already has a vote for this poll
+    const existingVote = await prisma.pollsvotes.findFirst({
+      where: {
+        user_id: BigInt(userId),
+        poll_id: pollId,
+      },
+    });
+
+    if (existingVote) {
+      // Update existing vote
+      await prisma.pollsvotes.update({
+        where: { id: existingVote.id },
+        data: { choice: choice },
+      });
+      console.log(
+        `Updated vote for user ${userId} in poll ${pollId} to choice ${choice}`
+      );
+    } else {
+      // Generate unique vote ID by summing user_id and poll_id
+      const voteId = BigInt(userId) + BigInt(pollId);
+
+      // Create new vote
+      await prisma.pollsvotes.create({
+        data: {
+          id: voteId,
+          user_id: BigInt(userId),
+          poll_id: pollId,
+          choice: choice,
+        },
+      });
+      console.log(
+        `Created new vote for user ${userId} in poll ${pollId} for choice ${choice}`
+      );
+    }
 
     res.status(200).json({ message: "Vote cast successfully" });
   } catch (error) {
@@ -193,13 +227,46 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
       }
     });
 
-    // TODO: Implement actual creation logic here
-    const createdPolls = normalizedPollsData.map((poll) => ({
-      // Mock creation logic
-      ...poll,
-      id: Math.floor(Math.random() * 10000), // Mock ID generation
-      published: false, // Default to unpublished
-    }));
+    // Generate unique poll IDs and create polls
+    const createdPolls = await Promise.all(
+      normalizedPollsData.map(async (poll) => {
+        // Generate unique poll ID (matching bot logic)
+        let pollId: number;
+        while (true) {
+          pollId = Math.floor(Math.random() * 90000) + 10000; // 10000-99999
+          const existing = await prisma.polls.findUnique({
+            where: { id: pollId },
+          });
+          if (!existing) break;
+        }
+
+        return await prisma.polls.create({
+          data: {
+            id: pollId,
+            question: poll.question,
+            published: false, // Always false initially like bot
+            active: false, // Always false initially like bot
+            guild_id: poll.guild_id,
+            choices: poll.choices,
+            time: null, // Set later when published
+            num: null, // Set later when published
+            message_id: null, // Set later when published
+            crosspost_message_ids: [], // Empty initially
+            tag: poll.tag,
+            image: poll.image || null,
+            description: poll.description || null,
+            thread_question: poll.thread_question || null,
+            show_question: poll.show_question ?? true,
+            show_options: poll.show_options ?? true,
+            show_voting: poll.show_voting ?? true,
+            fallback: poll.fallback ?? false,
+          },
+          include: {
+            tagRelation: true,
+          },
+        });
+      })
+    );
 
     console.log(
       `Created ${createdPolls.length} polls: ${createdPolls
@@ -257,18 +324,47 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
       }
     });
 
-    // TODO: Implement actual update logic here
-    const updatedPolls = normalizedPollsData.map((poll) => {
-      const existingPoll = existingPolls.find((p) => p.id === poll.id);
-      if (!existingPoll) {
-        throw new NotFoundError(`Poll with id ${poll.id} not found`);
-      }
-      return {
-        ...existingPoll,
-        ...poll,
-        published: existingPoll.published, // Preserve published state
-      };
-    });
+    // Update polls in database
+    const updatedPolls = await Promise.all(
+      normalizedPollsData.map(async (poll) => {
+        const existingPoll = existingPolls.find((p) => p.id === poll.id);
+        if (!existingPoll) {
+          throw new NotFoundError(`Poll with id ${poll.id} not found`);
+        }
+
+        return await prisma.polls.update({
+          where: { id: poll.id },
+          data: {
+            question: poll.question,
+            guild_id: poll.guild_id,
+            choices: poll.choices,
+            tag: poll.tag,
+            image: poll.image,
+            description: poll.description,
+            thread_question: poll.thread_question,
+            show_question: poll.show_question,
+            show_options: poll.show_options,
+            show_voting: poll.show_voting,
+            fallback: poll.fallback,
+            // Only update these if provided (preserve existing values otherwise)
+            ...(poll.time && { time: new Date(poll.time) }),
+            ...(poll.num !== undefined && { num: poll.num }),
+            ...(poll.message_id && { message_id: BigInt(poll.message_id) }),
+            ...(poll.crosspost_message_ids && {
+              crosspost_message_ids: poll.crosspost_message_ids.map((id) =>
+                BigInt(id)
+              ),
+            }),
+            ...(poll.active !== undefined && { active: poll.active }),
+            // Preserve published state from existing poll
+            published: existingPoll.published,
+          },
+          include: {
+            tagRelation: true,
+          },
+        });
+      })
+    );
     console.log(
       `Updated ${updatedPolls.length} polls: ${updatedPolls
         .map((p) => `"${p.question}"`)
@@ -305,9 +401,40 @@ pollRouter.post("/delete", requireManagementPerms, async (req, res) => {
       throw new ApiError("Cannot delete polls from other guilds", 403);
     }
 
-    // TODO: Implement actual deletion logic here
-    console.log(`Deleting polls with IDs: ${pollIds.join(", ")}`);
-    res.status(200).json({ message: "Polls deleted successfully" });
+    // Delete polls and related votes from database
+    await prisma.$transaction(async (tx) => {
+      // First delete all votes for these polls
+      await tx.pollsvotes.deleteMany({
+        where: {
+          poll_id: {
+            in: pollIds.map(Number),
+          },
+        },
+      });
+
+      // Then delete the polls
+      const deletedPolls = await tx.polls.deleteMany({
+        where: {
+          id: {
+            in: pollIds.map(Number),
+          },
+        },
+      });
+
+      if (deletedPolls.count === 0) {
+        throw new NotFoundError("No polls found with the provided IDs");
+      }
+
+      console.log(
+        `Deleted ${deletedPolls.count} polls with IDs: ${pollIds.join(", ")}`
+      );
+      return deletedPolls;
+    });
+
+    res.status(200).json({
+      message: "Polls deleted successfully",
+      deletedCount: pollIds.length,
+    });
   } catch (error) {
     ApiError.sendError(res, error);
   }
