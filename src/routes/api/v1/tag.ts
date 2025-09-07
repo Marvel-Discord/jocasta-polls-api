@@ -33,7 +33,27 @@ tagRouter.post("/create", async (req, res) => {
   try {
     // TODO: Implement tag creation logic here
     console.log("Creating tags:", req.body);
-    res.status(201).json({ message: "Tags created successfully" });
+
+    // Mock created tag - replace with actual creation logic
+    const mockCreatedTag = {
+      tag: Math.floor(Math.random() * 1000) + 1, // Random ID for now
+      name: req.body.name || "New Tag",
+      guild_id: BigInt(req.body.guild_id || "123456789012345678"),
+      channel_id: BigInt(req.body.channel_id || "987654321098765432"),
+      crosspost_channels: req.body.crosspost_channels || [],
+      crosspost_servers: req.body.crosspost_servers || [],
+      current_num: null,
+      colour: req.body.colour || null,
+      end_message: req.body.end_message || null,
+      end_message_latest_ids: [],
+      end_message_replace: req.body.end_message_replace || false,
+      end_message_role_ids: req.body.end_message_role_ids || [],
+      end_message_ping: req.body.end_message_ping || false,
+      end_message_self_assign: req.body.end_message_self_assign || false,
+      persistent: req.body.persistent || false,
+    };
+
+    res.status(201).json(mockCreatedTag);
   } catch (error) {
     ApiError.sendError(res, error);
   }

@@ -172,7 +172,16 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
 
     const tags = await getTags();
 
-    pollsData.forEach((poll) => {
+    // Convert string guild_id to bigint before validation
+    const normalizedPollsData = pollsData.map((poll) => ({
+      ...poll,
+      guild_id:
+        typeof poll.guild_id === "string"
+          ? BigInt(poll.guild_id)
+          : poll.guild_id,
+    }));
+
+    normalizedPollsData.forEach((poll) => {
       validatePoll(poll);
 
       if (poll.guild_id !== config.guildId) {
@@ -185,7 +194,7 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
     });
 
     // TODO: Implement actual creation logic here
-    const createdPolls = pollsData.map((poll) => ({
+    const createdPolls = normalizedPollsData.map((poll) => ({
       // Mock creation logic
       ...poll,
       id: Math.floor(Math.random() * 10000), // Mock ID generation
@@ -214,7 +223,16 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
       throw new BadRequestError("pollsData must be a non-empty array");
     }
 
-    pollsData.forEach((poll) => {
+    // Convert string guild_id to bigint before validation
+    const normalizedPollsData = pollsData.map((poll) => ({
+      ...poll,
+      guild_id:
+        typeof poll.guild_id === "string"
+          ? BigInt(poll.guild_id)
+          : poll.guild_id,
+    }));
+
+    normalizedPollsData.forEach((poll) => {
       validatePoll(poll);
 
       if (poll.guild_id !== config.guildId) {
@@ -223,15 +241,15 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
     });
 
     const existingPolls = await getPollsFromList(
-      pollsData.map((poll) => poll.id),
+      normalizedPollsData.map((poll) => poll.id),
       true
     );
-    if (existingPolls.length !== pollsData.length) {
+    if (existingPolls.length !== normalizedPollsData.length) {
       throw new NotFoundError("One or more polls not found");
     }
 
     const tags = await getTags();
-    pollsData.forEach((poll) => {
+    normalizedPollsData.forEach((poll) => {
       validatePublishedPoll(poll, existingPolls.find((p) => p.id === poll.id)!);
 
       if (poll.tag !== undefined && !tags.some((tag) => tag.tag === poll.tag)) {
@@ -240,7 +258,7 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
     });
 
     // TODO: Implement actual update logic here
-    const updatedPolls = pollsData.map((poll) => {
+    const updatedPolls = normalizedPollsData.map((poll) => {
       const existingPoll = existingPolls.find((p) => p.id === poll.id);
       if (!existingPoll) {
         throw new NotFoundError(`Poll with id ${poll.id} not found`);
