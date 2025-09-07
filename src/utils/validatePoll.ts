@@ -45,7 +45,18 @@ export function validatePublishedPoll(newPoll: Poll, existingPoll: Poll) {
       );
     }
 
-    if (newPoll.time !== existingPoll.time) {
+    const newTime = newPoll.time
+      ? newPoll.time instanceof Date
+        ? newPoll.time
+        : new Date(newPoll.time)
+      : null;
+    const existingTime = existingPoll.time
+      ? existingPoll.time instanceof Date
+        ? existingPoll.time
+        : new Date(existingPoll.time)
+      : null;
+
+    if (newTime?.getTime() !== existingTime?.getTime()) {
       throw new Error("Cannot change the time of a published poll");
     }
   }
