@@ -6,7 +6,7 @@ import config from "@/config";
 import { createServer } from "node:http";
 import { initializeAuth } from "@/auth/passport";
 
-export function createApp() {
+export async function createApp() {
 	const app = express();
 
 	const corsOptions = {
@@ -29,7 +29,7 @@ export function createApp() {
 	app.use(express.urlencoded({ extended: false }));
 	app.set("trust proxy", 1);
 
-	initializeAuth(app);
+	await initializeAuth(app);
 
 	app.use(apiRouter);
 

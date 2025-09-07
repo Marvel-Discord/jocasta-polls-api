@@ -4,6 +4,17 @@ import type { Express } from "express";
 import { Strategy as DiscordStrategy } from "passport-discord";
 import session from "express-session";
 import type { DiscordUserProfile } from "@/types/discordUserProfile";
+import { createClient } from "redis";
+import FileStore from "session-file-store";
+import type { Store } from "express-session";
+
+// Import RedisStore with proper typing
+let RedisStore: any;
+try {
+  RedisStore = require("connect-redis").default;
+} catch {
+  // RedisStore will be undefined if connect-redis is not available
+}
 
 const discordStrategy = new DiscordStrategy(
   {
@@ -19,7 +30,45 @@ const discordStrategy = new DiscordStrategy(
   }
 );
 
-export function initializeAuth(app: Express) {
+async function createSessionStore(): Promise<Store> {
+  if (config.redis.enabled && RedisStore) {
+    try {
+      const redisClient = createClient({
+        url: config.redis.url,
+      });
+
+      redisClient.on("error", (err) => {
+        console.warn("Redis Client Error:", err);
+        console.warn("Falling back to file-based session store");
+      });
+
+      await redisClient.connect();
+      console.log("Connected to Redis for session storage");
+
+      // Initialize RedisStore with the connected client
+      const redisStore = new RedisStore({
+        client: redisClient,
+        prefix: "jocasta-polls:",
+      });
+
+      return redisStore;
+    } catch (error) {
+      console.warn("Failed to connect to Redis:", error);
+      console.warn("Falling back to file-based session store");
+    }
+  }
+
+  // Fallback to file-based session store
+  const SessionFileStore = FileStore(session);
+  console.log("Using file-based session storage");
+  return new SessionFileStore({
+    path: "./sessions",
+    ttl: 7 * 24 * 60 * 60, // 7 days in seconds
+    retries: 0,
+  });
+}
+
+export async function initializeAuth(app: Express) {
   passport.serializeUser((user, done) => {
     done(null, user);
   });
@@ -31,9 +80,11 @@ export function initializeAuth(app: Express) {
   passport.use(discordStrategy);
 
   const isProduction = config.environment === "production";
+  const store = await createSessionStore();
 
   app.use(
     session({
+      store,
       secret: config.expressSessionSecret,
       resave: false,
       saveUninitialized: false,
@@ -41,6 +92,7 @@ export function initializeAuth(app: Express) {
         httpOnly: true,
         sameSite: "lax",
         secure: isProduction,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
       },
     })
   );

@@ -25,6 +25,10 @@ const config = {
   // having a random secret would mess with persistent sessions
   expressSessionSecret:
     process.env.EXPRESS_SESSION_SECRET || "change the secret in production",
+  redis: {
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+    enabled: process.env.REDIS_ENABLED === "true" || process.env.NODE_ENV === "production",
+  },
   auth: {
     discord: {
       clientId: requiredEnv("DISCORD_CLIENT_ID"),
