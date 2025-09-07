@@ -7,6 +7,7 @@ import type { DiscordUserProfile } from "@/types/discordUserProfile";
 import { createClient } from "redis";
 import FileStore from "session-file-store";
 import type { Store } from "express-session";
+import path from "path";
 
 // Import RedisStore with proper typing
 let RedisStore: any;
@@ -62,7 +63,7 @@ async function createSessionStore(): Promise<Store> {
   const SessionFileStore = FileStore(session);
   console.log("Using file-based session storage");
   return new SessionFileStore({
-    path: "./sessions",
+    path: path.join(process.cwd(), "temp", "sessions"),
     ttl: 7 * 24 * 60 * 60, // 7 days in seconds
     retries: 0,
   });

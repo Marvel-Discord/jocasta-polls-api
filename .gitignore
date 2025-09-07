@@ -139,3 +139,4 @@ dist
 
 # Session storage
 sessions/
+temp/

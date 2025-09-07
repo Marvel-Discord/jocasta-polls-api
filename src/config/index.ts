@@ -27,7 +27,9 @@ const config = {
     process.env.EXPRESS_SESSION_SECRET || "change the secret in production",
   redis: {
     url: process.env.REDIS_URL || "redis://localhost:6379",
-    enabled: process.env.REDIS_ENABLED === "true" || process.env.NODE_ENV === "production",
+    enabled:
+      process.env.REDIS_ENABLED === "true" ||
+      process.env.NODE_ENV === "production",
   },
   auth: {
     discord: {
