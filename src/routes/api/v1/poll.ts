@@ -263,7 +263,7 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
             active: false, // Always false initially like bot
             guild_id: poll.guild_id,
             choices: poll.choices,
-            time: null, // Set later when published
+            time: poll.time ? new Date(poll.time) : null,
             num: null, // Set later when published
             message_id: null, // Set later when published
             crosspost_message_ids: [], // Empty initially
