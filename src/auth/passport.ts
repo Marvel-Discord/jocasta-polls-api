@@ -106,7 +106,7 @@ export async function initializeAuth(app: Express) {
         sameSite: "lax",
         secure: isProduction,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-        // domain: isProduction ? ".marvelcord.com" : undefined,
+        domain: isProduction ? ".marvelcord.com" : undefined,
       },
     })
   );
@@ -128,6 +128,18 @@ export async function initializeAuth(app: Express) {
     console.log("Cookies received:", req.headers.cookie);
     console.log("Request origin:", req.headers.origin);
     console.log("Request URL:", req.url);
+    console.log("====================");
+
+    // Hook into response to see what cookies are being set
+    const originalSend = res.send;
+    res.send = function (data) {
+      console.log(
+        "Response cookies being set:",
+        res.getHeaders()["set-cookie"]
+      );
+      return originalSend.call(this, data);
+    };
+
     console.log("====================");
     next();
   });
