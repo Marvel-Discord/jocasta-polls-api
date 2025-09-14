@@ -106,7 +106,7 @@ export async function initializeAuth(app: Express) {
         sameSite: isProduction ? "none" : "lax",
         secure: isProduction,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-        // domain: isProduction ? ".marvelcord.com" : undefined,
+        domain: isProduction ? ".marvelcord.com" : undefined,
       },
     })
   );
@@ -117,6 +117,18 @@ export async function initializeAuth(app: Express) {
   app.use((req, res, next) => {
     console.log("Session ID:", req.sessionID);
     console.log("Session exists:", !!req.session);
+    next();
+  });
+
+  app.use((req, res, next) => {
+    console.log("=== SESSION DEBUG ===");
+    console.log("Session ID:", req.sessionID);
+    console.log("Session exists:", !!req.session);
+    console.log("User authenticated:", req.isAuthenticated());
+    console.log("Cookies received:", req.headers.cookie);
+    console.log("Request origin:", req.headers.origin);
+    console.log("Request URL:", req.url);
+    console.log("====================");
     next();
   });
 }
