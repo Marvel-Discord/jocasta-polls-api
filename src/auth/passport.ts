@@ -33,9 +33,11 @@ const discordStrategy = new DiscordStrategy(
 async function createSessionStore(): Promise<Store> {
   console.log("Redis enabled:", config.redis.enabled);
   console.log("Redis URL:", config.redis.url);
+  console.log("RedisStore available:", !!RedisStore);
 
   if (config.redis.enabled && RedisStore) {
     try {
+      console.log("Attempting to create Redis client...");
       const redisClient = createClient({
         url: config.redis.url,
       });
@@ -48,6 +50,11 @@ async function createSessionStore(): Promise<Store> {
         console.log("Redis client connected successfully");
       });
 
+      redisClient.on("ready", () => {
+        console.log("Redis client ready");
+      });
+
+      console.log("Connecting to Redis...");
       await redisClient.connect();
       console.log("Connected to Redis for session storage");
 
@@ -56,11 +63,19 @@ async function createSessionStore(): Promise<Store> {
         prefix: "jocasta-polls:",
       });
 
+      console.log("Redis store created successfully");
       return redisStore;
     } catch (error) {
       console.error("Failed to connect to Redis:", error);
       console.warn("Falling back to memory-based session store");
       // Fall through to memory store
+    }
+  } else {
+    if (!config.redis.enabled) {
+      console.log("Redis disabled in config");
+    }
+    if (!RedisStore) {
+      console.log("RedisStore not available - is connect-redis installed?");
     }
   }
 
