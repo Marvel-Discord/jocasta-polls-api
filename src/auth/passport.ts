@@ -7,9 +7,8 @@ import type { DiscordUserProfile } from "@/types/discordUserProfile";
 import { createClient } from "redis";
 import MemoryStore from "memorystore";
 import type { Store } from "express-session";
-import connectRedis from "connect-redis";
 
-const RedisStore = connectRedis(session);
+let RedisStore: any = null;
 
 const discordStrategy = new DiscordStrategy(
   {
@@ -31,6 +30,18 @@ async function createSessionStore(): Promise<Store> {
 
   if (config.redis.enabled) {
     try {
+      // Try to import and initialize RedisStore here
+      const connectRedis = await import("connect-redis");
+      console.log("connectRedis module:", Object.keys(connectRedis));
+
+      // Try different ways to access the RedisStore
+      if (connectRedis.default) {
+        RedisStore = connectRedis.default(session);
+      } else {
+        // For newer versions of connect-redis
+        RedisStore = connectRedis.default || connectRedis;
+      }
+
       console.log("Attempting to create Redis client...");
       const redisClient = createClient({
         url: config.redis.url,
