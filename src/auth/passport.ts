@@ -81,10 +81,12 @@ async function createSessionStore(): Promise<Store> {
 
 export async function initializeAuth(app: Express) {
   passport.serializeUser((user, done) => {
+    console.log("Serializing user:", user);
     done(null, user);
   });
 
   passport.deserializeUser<DiscordUserProfile>((user, done) => {
+    console.log("Deserializing user:", user.id);
     done(null, user);
   });
 
@@ -92,6 +94,14 @@ export async function initializeAuth(app: Express) {
 
   const isProduction = config.environment === "production";
   const store = await createSessionStore();
+
+  // Add session debugging middleware
+  app.use((req, res, next) => {
+    console.log("Session ID:", req.sessionID);
+    console.log("Session data:", req.session);
+    console.log("User authenticated:", req.isAuthenticated());
+    next();
+  });
 
   app.use(
     session({
@@ -104,6 +114,8 @@ export async function initializeAuth(app: Express) {
         sameSite: "lax",
         secure: isProduction,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+        // Add domain for production
+        domain: isProduction ? ".marvelcord.com" : undefined,
       },
     })
   );
