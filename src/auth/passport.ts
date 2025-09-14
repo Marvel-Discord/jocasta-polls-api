@@ -103,7 +103,7 @@ export async function initializeAuth(app: Express) {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
+        sameSite: "lax",
         secure: isProduction,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
         domain: isProduction ? ".marvelcord.com" : undefined,
