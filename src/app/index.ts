@@ -14,7 +14,6 @@ export async function createApp() {
       origin: string | undefined,
       callback: (error: Error | null, allow: boolean) => void
     ) => {
-      console.log("Request origin:", origin); // Debug log
       if (!origin) {
         callback(null, true);
         return;
