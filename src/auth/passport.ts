@@ -7,16 +7,9 @@ import type { DiscordUserProfile } from "@/types/discordUserProfile";
 import { createClient } from "redis";
 import MemoryStore from "memorystore";
 import type { Store } from "express-session";
+import connectRedis from "connect-redis";
 
-// Import RedisStore
-let RedisStore: any;
-try {
-  const connectRedis = require("connect-redis");
-  RedisStore = connectRedis.default || connectRedis;
-} catch (error) {
-  console.log("connect-redis import failed:", (error as Error).message);
-  RedisStore = null;
-}
+const RedisStore = connectRedis(session);
 
 const discordStrategy = new DiscordStrategy(
   {
@@ -35,9 +28,8 @@ const discordStrategy = new DiscordStrategy(
 async function createSessionStore(): Promise<Store> {
   console.log("Redis enabled:", config.redis.enabled);
   console.log("Redis URL:", config.redis.url);
-  console.log("RedisStore available:", !!RedisStore);
 
-  if (config.redis.enabled && RedisStore) {
+  if (config.redis.enabled) {
     try {
       console.log("Attempting to create Redis client...");
       const redisClient = createClient({
@@ -61,7 +53,7 @@ async function createSessionStore(): Promise<Store> {
       console.log("Connected to Redis for session storage");
 
       const redisStore = new RedisStore({
-        client: redisClient,
+        client: redisClient as any,
         prefix: "jocasta-polls:",
       });
 
@@ -70,15 +62,9 @@ async function createSessionStore(): Promise<Store> {
     } catch (error) {
       console.error("Failed to connect to Redis:", error);
       console.warn("Falling back to memory-based session store");
-      // Fall through to memory store
     }
   } else {
-    if (!config.redis.enabled) {
-      console.log("Redis disabled in config");
-    }
-    if (!RedisStore) {
-      console.log("RedisStore not available - is connect-redis installed?");
-    }
+    console.log("Redis disabled in config");
   }
 
   // Fallback to memory-based session store
