@@ -8,12 +8,14 @@ import { createClient } from "redis";
 import MemoryStore from "memorystore";
 import type { Store } from "express-session";
 
-// Import RedisStore with proper typing
+// Import RedisStore
 let RedisStore: any;
 try {
-  RedisStore = require("connect-redis").default;
-} catch {
-  // RedisStore will be undefined if connect-redis is not available
+  const connectRedis = require("connect-redis");
+  RedisStore = connectRedis.default || connectRedis;
+} catch (error) {
+  console.log("connect-redis import failed:", (error as Error).message);
+  RedisStore = null;
 }
 
 const discordStrategy = new DiscordStrategy(
