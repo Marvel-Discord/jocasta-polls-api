@@ -99,7 +99,7 @@ export async function initializeAuth(app: Express) {
   app.use((req, res, next) => {
     console.log("Session ID:", req.sessionID);
     console.log("Session data:", req.session);
-    console.log("User authenticated:", req.isAuthenticated());
+    // console.log("User authenticated:", req.isAuthenticated());
     next();
   });
 
