@@ -81,12 +81,10 @@ async function createSessionStore(): Promise<Store> {
 
 export async function initializeAuth(app: Express) {
   passport.serializeUser((user, done) => {
-    console.log("Serializing user:", (user as any).id);
     done(null, user);
   });
 
   passport.deserializeUser<DiscordUserProfile>((user, done) => {
-    console.log("Deserializing user:", user.id);
     done(null, user);
   });
 
@@ -95,7 +93,6 @@ export async function initializeAuth(app: Express) {
   const isProduction = config.environment === "production";
   const store = await createSessionStore();
 
-  console.log("Production mode:", isProduction);
   app.use(
     session({
       store,
@@ -113,34 +110,4 @@ export async function initializeAuth(app: Express) {
 
   app.use(passport.initialize());
   app.use(passport.session());
-
-  app.use((req, res, next) => {
-    console.log("Session ID:", req.sessionID);
-    console.log("Session exists:", !!req.session);
-    next();
-  });
-
-  app.use((req, res, next) => {
-    console.log("=== SESSION DEBUG ===");
-    console.log("Session ID:", req.sessionID);
-    console.log("Session exists:", !!req.session);
-    console.log("User authenticated:", req.isAuthenticated());
-    console.log("Cookies received:", req.headers.cookie);
-    console.log("Request origin:", req.headers.origin);
-    console.log("Request URL:", req.url);
-    console.log("====================");
-
-    // Hook into response to see what cookies are being set
-    const originalSend = res.send;
-    res.send = function (data) {
-      console.log(
-        "Response cookies being set:",
-        res.getHeaders()["set-cookie"]
-      );
-      return originalSend.call(this, data);
-    };
-
-    console.log("====================");
-    next();
-  });
 }
