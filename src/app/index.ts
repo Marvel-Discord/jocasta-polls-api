@@ -10,17 +10,16 @@ export async function createApp() {
   const app = express();
 
   const corsOptions = {
-    // origin: (
-    //   origin: string | undefined,
-    //   callback: (error: Error | null, allow: boolean) => void
-    // ) => {
-    //   if (!origin || origin === config.frontendUrl) {
-    //     callback(null, true);
-    //   } else {
-    //     callback(new Error("Not allowed by CORS"), false);
-    //   }
-    // },
-    origin: ["https://marvelcord.com", "http://localhost:3000"],
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allow: boolean) => void
+    ) => {
+      if (!origin || origin === config.frontendUrl) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"), false);
+      }
+    },
     credentials: true,
   };
 
