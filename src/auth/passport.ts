@@ -31,6 +31,9 @@ const discordStrategy = new DiscordStrategy(
 );
 
 async function createSessionStore(): Promise<Store> {
+  console.log("Redis enabled:", config.redis.enabled);
+  console.log("Redis URL:", config.redis.url);
+
   if (config.redis.enabled && RedisStore) {
     try {
       const redisClient = createClient({
