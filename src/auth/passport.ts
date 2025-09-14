@@ -41,14 +41,16 @@ async function createSessionStore(): Promise<Store> {
       });
 
       redisClient.on("error", (err) => {
-        console.warn("Redis Client Error:", err);
-        console.warn("Falling back to file-based session store");
+        console.error("Redis Client Error:", err);
+      });
+
+      redisClient.on("connect", () => {
+        console.log("Redis client connected successfully");
       });
 
       await redisClient.connect();
       console.log("Connected to Redis for session storage");
 
-      // Initialize RedisStore with the connected client
       const redisStore = new RedisStore({
         client: redisClient,
         prefix: "jocasta-polls:",
@@ -56,12 +58,13 @@ async function createSessionStore(): Promise<Store> {
 
       return redisStore;
     } catch (error) {
-      console.warn("Failed to connect to Redis:", error);
-      console.warn("Falling back to file-based session store");
+      console.error("Failed to connect to Redis:", error);
+      console.warn("Falling back to memory-based session store");
+      // Fall through to memory store
     }
   }
 
-  // Fallback to memory-based session store (Windows-friendly)
+  // Fallback to memory-based session store
   const MemoryStoreSession = MemoryStore(session);
   console.log("Using memory-based session storage with TTL");
   return new MemoryStoreSession({
