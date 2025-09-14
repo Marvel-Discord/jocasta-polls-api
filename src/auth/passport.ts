@@ -81,7 +81,7 @@ async function createSessionStore(): Promise<Store> {
 
 export async function initializeAuth(app: Express) {
   passport.serializeUser((user, done) => {
-    console.log("Serializing user:", user);
+    console.log("Serializing user:", (user as any).id);
     done(null, user);
   });
 
@@ -95,14 +95,6 @@ export async function initializeAuth(app: Express) {
   const isProduction = config.environment === "production";
   const store = await createSessionStore();
 
-  // Add session debugging middleware
-  app.use((req, res, next) => {
-    console.log("Session ID:", req.sessionID);
-    console.log("Session data:", req.session);
-    // console.log("User authenticated:", req.isAuthenticated());
-    next();
-  });
-
   app.use(
     session({
       store,
@@ -111,10 +103,11 @@ export async function initializeAuth(app: Express) {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: "lax",
+        // Change sameSite for cross-origin
+        sameSite: isProduction ? "none" : "lax",
         secure: isProduction,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-        // Add domain for production
+        // Use the parent domain for cross-subdomain cookies
         domain: isProduction ? ".marvelcord.com" : undefined,
       },
     })
@@ -122,4 +115,10 @@ export async function initializeAuth(app: Express) {
 
   app.use(passport.initialize());
   app.use(passport.session());
+
+  app.use((req, res, next) => {
+    console.log("Session ID:", req.sessionID);
+    console.log("Session exists:", !!req.session);
+    next();
+  });
 }
