@@ -8,14 +8,6 @@ import { createClient } from "redis";
 import MemoryStore from "memorystore";
 import type { Store } from "express-session";
 
-// Import RedisStore with proper typing
-let RedisStore: any;
-try {
-  RedisStore = require("connect-redis").default;
-} catch {
-  // RedisStore will be undefined if connect-redis is not available
-}
-
 const discordStrategy = new DiscordStrategy(
   {
     clientID: config.auth.discord.clientId,
@@ -31,34 +23,53 @@ const discordStrategy = new DiscordStrategy(
 );
 
 async function createSessionStore(): Promise<Store> {
-  if (config.redis.enabled && RedisStore) {
+  console.log("Redis enabled:", config.redis.enabled);
+  console.log("Redis URL:", config.redis.url);
+
+  if (config.redis.enabled) {
     try {
+      // Import RedisStore from connect-redis (v7+ syntax)
+      const { RedisStore } = (await import("connect-redis")) as any;
+      console.log("RedisStore imported successfully");
+
+      console.log("Attempting to create Redis client...");
       const redisClient = createClient({
         url: config.redis.url,
       });
 
       redisClient.on("error", (err) => {
-        console.warn("Redis Client Error:", err);
-        console.warn("Falling back to file-based session store");
+        console.error("Redis Client Error:", err);
       });
 
+      redisClient.on("connect", () => {
+        console.log("Redis client connected successfully");
+      });
+
+      redisClient.on("ready", () => {
+        console.log("Redis client ready");
+      });
+
+      console.log("Connecting to Redis...");
       await redisClient.connect();
       console.log("Connected to Redis for session storage");
 
-      // Initialize RedisStore with the connected client
+      // Create RedisStore instance (connect-redis v7+ pattern)
       const redisStore = new RedisStore({
         client: redisClient,
         prefix: "jocasta-polls:",
       });
 
+      console.log("Redis store created successfully");
       return redisStore;
     } catch (error) {
-      console.warn("Failed to connect to Redis:", error);
-      console.warn("Falling back to file-based session store");
+      console.error("Failed to connect to Redis:", error);
+      console.warn("Falling back to memory-based session store");
     }
+  } else {
+    console.log("Redis disabled in config");
   }
 
-  // Fallback to memory-based session store (Windows-friendly)
+  // Fallback to memory-based session store
   const MemoryStoreSession = MemoryStore(session);
   console.log("Using memory-based session storage with TTL");
   return new MemoryStoreSession({
@@ -87,7 +98,7 @@ export async function initializeAuth(app: Express) {
       store,
       secret: config.expressSessionSecret,
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true,
       cookie: {
         httpOnly: true,
         sameSite: "lax",

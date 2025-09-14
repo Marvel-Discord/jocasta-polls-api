@@ -14,13 +14,36 @@ export async function createApp() {
       origin: string | undefined,
       callback: (error: Error | null, allow: boolean) => void
     ) => {
-      if (!origin || origin === config.frontendUrl) {
+      console.log("Request origin:", origin); // Debug log
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow requests from your domain and Netlify
+      const allowedOrigins = [
+        config.frontendUrl,
+        "https://polls.marvelcord.com",
+        "https://marvel-discord.netlify.app",
+      ];
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.log("CORS blocked origin:", origin);
         callback(new Error("Not allowed by CORS"), false);
       }
     },
     credentials: true,
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+      "rsc",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   };
 
   app.use(cors(corsOptions));
