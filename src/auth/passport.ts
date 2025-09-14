@@ -8,8 +8,6 @@ import { createClient } from "redis";
 import MemoryStore from "memorystore";
 import type { Store } from "express-session";
 
-let RedisStore: any = null;
-
 const discordStrategy = new DiscordStrategy(
   {
     clientID: config.auth.discord.clientId,
@@ -30,17 +28,9 @@ async function createSessionStore(): Promise<Store> {
 
   if (config.redis.enabled) {
     try {
-      // Try to import and initialize RedisStore here
-      const connectRedis = await import("connect-redis");
-      console.log("connectRedis module:", Object.keys(connectRedis));
-
-      // Try different ways to access the RedisStore
-      if (connectRedis.default) {
-        RedisStore = connectRedis.default(session);
-      } else {
-        // For newer versions of connect-redis
-        RedisStore = connectRedis.default || connectRedis;
-      }
+      // Import RedisStore from connect-redis (v7+ syntax)
+      const { RedisStore } = (await import("connect-redis")) as any;
+      console.log("RedisStore imported successfully");
 
       console.log("Attempting to create Redis client...");
       const redisClient = createClient({
@@ -63,8 +53,9 @@ async function createSessionStore(): Promise<Store> {
       await redisClient.connect();
       console.log("Connected to Redis for session storage");
 
+      // Create RedisStore instance (connect-redis v7+ pattern)
       const redisStore = new RedisStore({
-        client: redisClient as any,
+        client: redisClient,
         prefix: "jocasta-polls:",
       });
 
