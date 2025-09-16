@@ -1,25 +1,181 @@
+import { Prisma, type polls } from "@prisma/client";
+
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
-import { type polls, Prisma } from "@prisma/client";
+import { OrderDir, OrderType } from "@/types";
 
+/**
+ * User filtering options for polls
+ */
+export interface PollFilterUser {
+  userId: bigint;
+  notVoted?: boolean;
+}
+
+/**
+ * Comprehensive filtering and pagination options for poll queries
+ */
 interface PollFilters {
   guildId: bigint;
   published?: boolean;
   tag?: number;
   user?: PollFilterUser;
   search?: string;
-
   page?: number;
   limit?: number;
-
-  managementOverride?: boolean; // Overrides hidden votes
+  managementOverride?: boolean; // Overrides hidden votes visibility
+  order?: OrderType;
+  orderDir?: OrderDir;
+  seed?: number;
 }
 
-export interface PollFilterUser {
-  userId: bigint;
-  notVoted?: boolean;
+/**
+ * Extended poll type that includes vote relation data for processing
+ */
+type PollWithVotes = polls & { votesRelation: { choice: number }[] };
+
+// ===== UTILITY FUNCTIONS =====
+
+/**
+ * Sanitizes search input for safe use in database queries
+ */
+function sanitizeSearchInput(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/([&|!()"'`])/g, "\\$1") // Escape special characters
+    .replace(/\s+/g, " ") // Normalize whitespace
+    .trim()
+    .split(" ")
+    .filter(Boolean) // Remove empty strings
+    .join(" ");
 }
 
+/**
+ * Creates pagination metadata for API responses
+ */
+function createPaginationMeta(
+  total: number,
+  page: number,
+  limit: number,
+  randomSeed?: number
+): Meta {
+  const totalPages = Math.ceil(total / limit);
+  const nextPage = page < totalPages ? page + 1 : null;
+  const prevPage = page > 1 ? page - 1 : null;
+
+  return {
+    total,
+    page,
+    limit,
+    totalPages,
+    nextPage,
+    prevPage,
+    ...(randomSeed !== undefined ? { randomSeed } : {}),
+  };
+}
+
+/**
+ * Tallies votes for a poll and returns the poll with vote counts
+ */
+function tallyPollVotes(poll: PollWithVotes): Poll {
+  const { votesRelation, ...restPoll } = poll;
+  const voteTally = new Array(poll.choices.length).fill(0);
+
+  for (const vote of votesRelation) {
+    if (vote.choice >= 0 && vote.choice < voteTally.length) {
+      voteTally[vote.choice]++;
+    }
+  }
+
+  return {
+    ...restPoll,
+    votes: voteTally,
+  };
+}
+
+// ===== QUERY BUILDERS =====
+
+/**
+ * Builds Prisma where conditions for poll filtering
+ */
+function buildPollFilters(options: {
+  published?: boolean;
+  guildId: bigint;
+  tag?: number;
+  user?: PollFilterUser;
+  searchQuery?: string;
+}) {
+  const { published, guildId, tag, user, searchQuery } = options;
+
+  return {
+    published,
+    guild_id: guildId,
+    ...(tag !== undefined ? { tag } : {}),
+    ...(user
+      ? {
+          votesRelation: user.notVoted
+            ? { none: { user_id: user.userId } }
+            : { some: { user_id: user.userId } },
+        }
+      : {}),
+    ...(searchQuery
+      ? {
+          OR: [
+            {
+              question: {
+                contains: searchQuery,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              description: {
+                contains: searchQuery,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            { choices: { has: searchQuery } },
+          ],
+        }
+      : {}),
+  } as any;
+}
+
+/**
+ * Gets poll IDs that a user has voted on, with optional filtering
+ */
+async function getUserVotedPollIds(user?: PollFilterUser) {
+  if (!user) return null;
+
+  const votedPolls = await prisma.pollsvotes.findMany({
+    where: { user_id: user.userId },
+    select: { poll_id: true },
+  });
+
+  const votedIds = votedPolls.map((v) => v.poll_id);
+
+  if (user.notVoted) {
+    return votedIds.length > 0
+      ? { filter: { id: { notIn: votedIds } }, isEmpty: false }
+      : { filter: {}, isEmpty: false };
+  }
+
+  return votedIds.length === 0
+    ? { isEmpty: true }
+    : { filter: { id: { in: votedIds } }, isEmpty: false };
+}
+
+/**
+ * Determines the sort order direction
+ */
+function getOrderDirection(orderDir?: OrderDir): "asc" | "desc" {
+  return orderDir === OrderDir.Asc ? "asc" : "desc";
+}
+
+// ===== MAIN SERVICE FUNCTIONS =====
+
+/**
+ * Retrieves polls with filtering, pagination, and sorting options
+ */
 export async function getPolls({
   guildId,
   published = true,
@@ -29,95 +185,282 @@ export async function getPolls({
   page = 1,
   limit = 10,
   managementOverride = false,
+  order = OrderType.Time,
+  orderDir,
+  seed,
 }: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
-  const safeSearch = search ? safeTsQuery(search) : undefined;
-
-  const filters = {
+  const searchQuery = search ? sanitizeSearchInput(search) : undefined;
+  const filters = buildPollFilters({
     published,
-    guild_id: guildId,
+    guildId,
+    tag,
+    user,
+    searchQuery,
+  });
 
-    ...(tag !== undefined ? { tag } : {}),
+  // Get total count for pagination
+  const total = await prisma.polls.count({ where: filters });
 
-    ...(user
-      ? {
-          votesRelation: user.notVoted
-            ? { none: { user_id: user.userId } }
-            : { some: { user_id: user.userId } },
-        }
-      : {}),
+  let data: Poll[] = [];
+  let randomSeed: number | undefined = undefined;
 
-    ...(search
-      ? {
-          OR: [
-            {
-              question: {
-                contains: safeSearch,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              description: {
-                contains: safeSearch,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            { choices: { has: safeSearch } },
-          ],
-        }
-      : {}),
-  };
+  if (order === OrderType.Votes || order === OrderType.Random) {
+    const result = await handleSpecialOrderingQueries({
+      filters,
+      user,
+      order,
+      orderDir,
+      page,
+      limit,
+      guildId,
+      published,
+      tag,
+      searchQuery,
+      seed,
+    });
 
-  const [data, total] = await Promise.all([
-    prisma.polls
-      .findMany({
-        where: filters,
-        take: limit,
-        skip: (page - 1) * limit,
-        orderBy: {
-          time: "desc",
-        },
-        include: {
-          votesRelation: {
-            select: {
-              choice: true,
-            },
-          },
-        },
-      })
-      .then((polls) => polls.map((poll) => tallyVotes(poll))),
+    data = result.data;
+    randomSeed = result.randomSeed;
+  } else {
+    // Standard time-based ordering
+    data = await handleTimeOrderedQuery({
+      filters,
+      page,
+      limit,
+      orderDir,
+    });
+  }
 
-    prisma.polls.count({
-      where: filters,
-    }),
-  ]);
-
-  const meta: Meta = {
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-    nextPage: page < Math.ceil(total / limit) ? page + 1 : null,
-    prevPage: page > 1 ? page - 1 : null,
-  };
-
-  const processedData = !managementOverride
-    ? data.map((poll) => ({
-        ...poll,
-        votes: poll.show_voting ? poll.votes ?? [] : null, // Hide votes if show_voting is false
-      }))
-    : data;
+  const meta = createPaginationMeta(total, page, limit, randomSeed);
+  const processedData = processDataForVisibility(data, managementOverride);
 
   return { data: processedData, meta };
 }
 
+/**
+ * Handles vote count and random ordering queries that require special processing
+ */
+async function handleSpecialOrderingQueries({
+  filters,
+  user,
+  order,
+  orderDir,
+  page,
+  limit,
+  guildId,
+  published,
+  tag,
+  searchQuery,
+  seed,
+}: {
+  filters: any;
+  user?: PollFilterUser;
+  order: OrderType;
+  orderDir?: OrderDir;
+  page: number;
+  limit: number;
+  guildId: bigint;
+  published?: boolean;
+  tag?: number;
+  searchQuery?: string;
+  seed?: number;
+}): Promise<{ data: Poll[]; randomSeed?: number }> {
+  const offset = (page - 1) * limit;
+
+  // Apply user voting filters
+  const userFilter = await getUserVotedPollIds(user);
+  if (userFilter?.isEmpty) {
+    return { data: [] };
+  }
+  if (userFilter?.filter) {
+    Object.assign(filters, userFilter.filter);
+  }
+
+  if (order === OrderType.Votes) {
+    return await handleVoteOrderedQuery({ filters, limit, offset, orderDir });
+  } else {
+    return await handleRandomOrderedQuery({
+      guildId,
+      published,
+      tag,
+      searchQuery,
+      filters,
+      limit,
+      offset,
+      seed,
+    });
+  }
+}
+
+/**
+ * Handles vote count ordering
+ */
+async function handleVoteOrderedQuery({
+  filters,
+  limit,
+  offset,
+  orderDir,
+}: {
+  filters: any;
+  limit: number;
+  offset: number;
+  orderDir?: OrderDir;
+}): Promise<{ data: Poll[] }> {
+  const polls = await prisma.polls.findMany({
+    where: filters,
+    take: limit,
+    skip: offset,
+    include: {
+      votesRelation: {
+        select: {
+          choice: true,
+        },
+      },
+    },
+  });
+
+  // Sort by vote count after fetching
+  const pollsWithVotes = polls.map(tallyPollVotes);
+  pollsWithVotes.sort((a, b) => {
+    const aTotal = (a.votes || []).reduce((sum, count) => sum + count, 0);
+    const bTotal = (b.votes || []).reduce((sum, count) => sum + count, 0);
+    return orderDir === OrderDir.Desc ? bTotal - aTotal : aTotal - bTotal;
+  });
+
+  return { data: pollsWithVotes };
+}
+
+/**
+ * Handles random ordering using database-level randomization
+ */
+async function handleRandomOrderedQuery({
+  guildId,
+  published,
+  tag,
+  searchQuery,
+  filters,
+  limit,
+  offset,
+  seed,
+}: {
+  guildId: bigint;
+  published?: boolean;
+  tag?: number;
+  searchQuery?: string;
+  filters: any;
+  limit: number;
+  offset: number;
+  seed?: number;
+}): Promise<{ data: Poll[]; randomSeed: number }> {
+  const randomSeed =
+    typeof seed === "number"
+      ? seed
+      : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+
+  const pollIds: { id: number }[] = await prisma.$queryRaw(
+    Prisma.sql`
+      SELECT id FROM polls
+      WHERE guild_id = ${guildId}
+      ${published ? Prisma.sql`AND published = ${published}` : Prisma.empty}
+      ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
+      ${
+        searchQuery
+          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}))`
+          : Prisma.empty
+      }
+      ${
+        filters.id
+          ? filters.id.in
+            ? Prisma.sql`AND id = ANY(${filters.id.in})`
+            : Prisma.sql`AND id NOT IN (${Prisma.join(filters.id.notIn)})`
+          : Prisma.empty
+      }
+      ORDER BY md5(CONCAT(id::text, '-', ${randomSeed}))
+      LIMIT ${limit} OFFSET ${offset}
+    `
+  );
+
+  // Fetch full poll data with votes
+  const polls = await prisma.polls.findMany({
+    where: {
+      id: { in: pollIds.map((p) => p.id) },
+    },
+    include: {
+      votesRelation: {
+        select: {
+          choice: true,
+        },
+      },
+    },
+  });
+
+  // Maintain random order
+  const pollMap = new Map(polls.map((poll) => [poll.id, poll]));
+  const orderedPolls = pollIds.map(({ id }) => pollMap.get(id)!);
+
+  return {
+    data: orderedPolls.map(tallyPollVotes),
+    randomSeed,
+  };
+}
+
+/**
+ * Handles standard time-based ordering
+ */
+async function handleTimeOrderedQuery({
+  filters,
+  page,
+  limit,
+  orderDir,
+}: {
+  filters: any;
+  page: number;
+  limit: number;
+  orderDir?: OrderDir;
+}): Promise<Poll[]> {
+  const orderBy = { time: getOrderDirection(orderDir) };
+
+  return await prisma.polls
+    .findMany({
+      where: filters,
+      take: limit,
+      skip: (page - 1) * limit,
+      orderBy,
+      include: {
+        votesRelation: {
+          select: {
+            choice: true,
+          },
+        },
+      },
+    })
+    .then((polls) => polls.map(tallyPollVotes));
+}
+
+/**
+ * Processes poll data based on management override and vote visibility settings
+ */
+function processDataForVisibility(
+  data: Poll[],
+  managementOverride: boolean
+): Poll[] {
+  if (managementOverride) return data;
+
+  return data.map((poll) => ({
+    ...poll,
+    votes: poll.show_voting ? poll.votes ?? [] : null,
+  }));
+}
+
+/**
+ * Retrieves a single poll by ID
+ */
 export async function getPollById(
   id: number,
   managementOverride: boolean = false
 ): Promise<Poll | null> {
   const poll = await prisma.polls.findUnique({
-    where: {
-      id,
-    },
+    where: { id },
     include: {
       votesRelation: {
         select: {
@@ -134,9 +477,12 @@ export async function getPollById(
     return { ...restPoll, votes: null };
   }
 
-  return tallyVotes(poll);
+  return tallyPollVotes(poll);
 }
 
+/**
+ * Retrieves multiple polls by their IDs
+ */
 export async function getPollsFromList(
   pollIds: number[],
   managementOverride: boolean = false
@@ -154,34 +500,7 @@ export async function getPollsFromList(
     },
   });
 
-  return polls.map((poll) => (managementOverride ? tallyVotes(poll) : { ...poll, votes: null }));
-}
-
-function tallyVotes(
-  poll: polls & { votesRelation: { choice: number }[] }
-): Poll {
-  const { votesRelation, ...restPoll } = poll;
-  const voteTally = new Array(poll.choices.length).fill(0);
-  for (const vote of poll.votesRelation) {
-    voteTally[vote.choice] = (voteTally[vote.choice] || 0) + 1;
-  }
-
-  return {
-    ...restPoll,
-    votes: voteTally,
-  };
-}
-
-function safeTsQuery(input: string): string {
-  // Escape the special characters so they can be used safely
-  const escapedInput = input
-    .toLowerCase()
-    .replace(/([&|!()"'`])/g, "\\$1") // Escape special characters
-    .replace(/\s+/g, " ") // Normalize whitespace (e.g., multiple spaces)
-    .trim()
-    .split(" ")
-    .filter(Boolean) // Remove empty strings
-    .join(" "); // Join with 'AND' logic
-
-  return escapedInput;
+  return polls.map((poll) =>
+    managementOverride ? tallyPollVotes(poll) : { ...poll, votes: null }
+  );
 }

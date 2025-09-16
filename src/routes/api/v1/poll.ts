@@ -26,6 +26,7 @@ import {
   getVotesByUser,
 } from "@/services/voteService";
 import { Poll } from "@/types";
+import { OrderType, OrderDir } from "@/types";
 import { attachManagementPermsFlag } from "@/utils/checkDiscordMembership";
 import { validatePoll, validatePublishedPoll } from "@/utils/validatePoll";
 import { Router } from "express";
@@ -35,8 +36,18 @@ export const pollRouter = Router();
 pollRouter.get("/", async (req, res) => {
   try {
     const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
-    const { published, tag, userId, notVoted, search, page, limit } =
-      await parsePollFilterParams(req.query as unknown as PollFilterParams);
+    const {
+      published,
+      tag,
+      userId,
+      notVoted,
+      search,
+      page,
+      limit,
+      order,
+      orderDir,
+      seed,
+    } = await parsePollFilterParams(req.query as unknown as PollFilterParams);
 
     let hasManagementPerms = false;
 
@@ -60,6 +71,9 @@ pollRouter.get("/", async (req, res) => {
       search,
       page,
       limit,
+      order,
+      orderDir,
+      seed,
       managementOverride: hasManagementPerms,
     });
 
@@ -72,6 +86,11 @@ pollRouter.get("/", async (req, res) => {
           }?${new URLSearchParams({
             ...query,
             page: pageNum.toString(),
+            ...(order ? { order } : {}),
+            ...(orderDir ? { orderDir } : {}),
+            ...(meta.randomSeed !== undefined
+              ? { seed: meta.randomSeed.toString() }
+              : {}),
           }).toString()}`
         : undefined;
 

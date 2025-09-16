@@ -71,3 +71,30 @@ model pollsvotes {
   
   poll      polls      @relation("PollVotes", fields: [poll_id], references: [id])
 }
+
+/// View mapped model for `polls_view` created in the database.
+/// Read-only; use prisma.$queryRaw or select from this model for conveniences.
+model polls_view {
+  id                    Int      @id
+  question              String
+  published             Boolean
+  active                Boolean
+  guild_id              BigInt
+  choices               String[]
+  time                  DateTime? @db.Timestamptz(6)
+  num                   Int?
+  message_id            BigInt?
+  crosspost_message_ids BigInt[]
+  tag                   Int
+  image                 String?
+  description           String?
+  thread_question       String?
+  show_question         Boolean
+  show_options          Boolean
+  show_voting           Boolean
+  fallback              Boolean
+
+  vote_count            Int
+
+  @@map("polls_view")
+}

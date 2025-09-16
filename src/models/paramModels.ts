@@ -1,6 +1,7 @@
 import { BadRequestError } from "@/errors";
 import type { Poll, Tag, Vote } from "@/types";
 import { z } from "zod";
+import { OrderType, OrderDir } from "@/types";
 
 const BooleanFilter = z
   .string()
@@ -47,6 +48,14 @@ const PollFilterParamsModel = z
     userId: BigIntFilter.optional(),
     notVoted: BooleanFilter,
     search: z.coerce.string().optional(),
+    // ordering: one of 'time' | 'votes' | 'random'
+    order: z
+      .enum([OrderType.Time, OrderType.Votes, OrderType.Random])
+      .optional(),
+    // direction for time/votes: 'asc'|'desc'
+    orderDir: z.enum([OrderDir.Asc, OrderDir.Desc]).optional(),
+    // seed for random ordering (string form will be coerced to number)
+    seed: z.string().optional(),
     ...PaginationModel.shape,
   })
   .refine((data) => !(data.notVoted && !data.userId), {
@@ -97,6 +106,9 @@ export interface PollFilterParams {
 
   page?: number;
   limit?: number;
+  order?: OrderType;
+  orderDir?: OrderDir;
+  seed?: number;
 }
 
 export async function parsePollFilterParams(
@@ -111,7 +123,47 @@ export async function parsePollFilterParams(
     );
   }
 
-  return result.data;
+  // Additional validation for orderDir/seed depending on order
+  const parsed: PollFilterParams = {
+    published: result.data.published,
+    tag: result.data.tag,
+    userId: result.data.userId,
+    notVoted: result.data.notVoted,
+    search: result.data.search,
+    page: result.data.page,
+    limit: result.data.limit,
+  };
+
+  if (result.data.order) {
+    parsed.order = result.data.order;
+
+    // validate orderDir/seed
+    if (result.data.order === "random") {
+      if (result.data.seed !== undefined) {
+        if (!/^-?\d+$/.test(result.data.seed)) {
+          throw new BadRequestError("seed must be an integer for random order");
+        }
+        parsed.seed = Number(result.data.seed);
+      }
+    } else {
+      if (result.data.orderDir !== undefined) {
+        const low = result.data.orderDir as string;
+        if (low !== OrderDir.Asc && low !== OrderDir.Desc) {
+          throw new BadRequestError(
+            "orderDir must be 'asc' or 'desc' for time/votes order"
+          );
+        }
+        parsed.orderDir = low === OrderDir.Asc ? OrderDir.Asc : OrderDir.Desc;
+      }
+    }
+  } else if (result.data.orderDir || result.data.seed) {
+    // orderDir/seed specified without order is invalid
+    throw new BadRequestError(
+      "'orderDir' or 'seed' is only valid when 'order' is specified"
+    );
+  }
+
+  return parsed;
 }
 
 export interface TagIdParams {
