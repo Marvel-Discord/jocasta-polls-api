@@ -6,14 +6,10 @@ RUN corepack enable \
 
 WORKDIR /usr/src/app
 
-# Only copy lockfile and package manifest first for better caching
-COPY package.json pnpm-lock.yaml ./
+COPY . .
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
-
-# Copy the rest of the source
-COPY . .
 
 ENV NODE_ENV=production
 
