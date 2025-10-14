@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.git
+.vscode
+temp
+sessions
+*.log
+.env
+pnpm-lock.yaml
+.DS_Store
