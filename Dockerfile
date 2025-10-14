@@ -24,9 +24,9 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
 
-# Install only prod dependencies
+# Install only prod dependencies, skip postinstall scripts
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
-RUN pnpm install --frozen-lockfile --prod
+RUN npm_config_ignore_scripts=true pnpm install --frozen-lockfile --prod
 
 # Copy built code and Prisma client from builder
 COPY --from=builder /app/dist ./dist
