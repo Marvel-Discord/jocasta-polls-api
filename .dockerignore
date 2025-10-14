@@ -7,5 +7,4 @@ temp
 sessions
 *.log
 .env
-pnpm-lock.yaml
 .DS_Store
