@@ -5,13 +5,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+COPY . .
 
 # Install all dependencies (dev + prod)
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 RUN pnpm install --frozen-lockfile
-
-COPY . .
 
 # Generate Prisma client & build TypeScript
 RUN pnpm prisma generate
