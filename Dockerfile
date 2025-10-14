@@ -1,20 +1,24 @@
-FROM node:22-alpine
+# Builder stage
+FROM node:22-alpine AS builder
 
-# Use Corepack to activate the pnpm version pinned in package.json (packageManager)
-RUN corepack enable \
-	&& corepack prepare pnpm@10.13.1 --activate
+WORKDIR /app
 
-WORKDIR /usr/src/app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN pnpm install --frozen-lockfile
 
 COPY . .
+RUN pnpm build
 
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+# Runtime stage
+FROM node:22-alpine
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN pnpm install --frozen-lockfile --prod  # only prod deps
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
 ENV NODE_ENV=production
-
-# Default port used in config (can be overridden with -e PORT)
 EXPOSE 8000
-
-# Run the start script (package.json start uses tsx)
-CMD ["pnpm", "start"]
+CMD ["node", "dist/index.js"]
