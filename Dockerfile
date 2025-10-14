@@ -1,38 +1,24 @@
-# Multi-stage Dockerfile for jocasta-polls-api
-FROM node:22-bullseye-slim AS builder
-WORKDIR /app
+FROM node:22-alpine
 
-# Enable corepack and ensure pnpm is available
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Use Corepack to activate the pnpm version pinned in package.json (packageManager)
+RUN corepack enable \
+	&& corepack prepare pnpm@10.13.1 --activate
 
-# Copy lockfile and package manifest first for efficient caching
-COPY package.json pnpm-lock.yaml /app/
+WORKDIR /usr/src/app
+
+# Only copy lockfile and package manifest first for better caching
+COPY package.json pnpm-lock.yaml ./
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy the rest of the source
 COPY . .
 
-# Install dependencies (will run `postinstall` which triggers `prisma generate`)
-RUN pnpm install --frozen-lockfile
-
-# Build TypeScript to `dist`
-RUN pnpm build
-
-### Runtime image
-FROM node:22-bullseye-slim AS runner
-WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Copy package.json so Node knows this is ESM (type: module)
-COPY package.json .
-
-# Copy only the production files from builder
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-
 ENV NODE_ENV=production
 
+# Default port used in config (can be overridden with -e PORT)
 EXPOSE 8000
 
-# Run the compiled JS entry
-CMD ["node", "dist/index.js"]
+# Run the start script (package.json start uses tsx)
+CMD ["pnpm", "start"]
