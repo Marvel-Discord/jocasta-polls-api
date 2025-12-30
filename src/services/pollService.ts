@@ -92,7 +92,7 @@ function tallyPollVotes(poll: PollWithVotes): Poll {
   return {
     ...restPoll,
     votes: voteTally,
-    totalVotes,
+    total_votes: totalVotes,
   };
 }
 
@@ -461,7 +461,7 @@ function processDataForVisibility(
   return data.map((poll) => ({
     ...poll,
     votes: poll.show_voting ? poll.votes ?? [] : null,
-    // totalVotes is already included and remains visible
+    // total_votes is already included and remains visible
   }));
 }
 
@@ -488,7 +488,7 @@ export async function getPollById(
   if (!managementOverride) {
     const { votesRelation, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, totalVotes };
+    return { ...restPoll, votes: null, total_votes: totalVotes };
   }
 
   return tallyPollVotes(poll);
@@ -520,6 +520,6 @@ export async function getPollsFromList(
     }
     const { votesRelation, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, totalVotes };
+    return { ...restPoll, votes: null, total_votes: totalVotes };
   });
 }

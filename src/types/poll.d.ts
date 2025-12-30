@@ -6,7 +6,7 @@ export interface Poll {
   guild_id: bigint;
   choices: string[];
   votes: number[]?;
-  totalVotes: number;
+  total_votes: number;
   time: Date | null;
   // duration: string | null;
   num: number | null;
