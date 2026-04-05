@@ -35,15 +35,4 @@ export default [
     files: ["prisma/**/*.ts"],
     rules: {},
   },
-
-  {
-    plugins: {
-      prisma: require("eslint-plugin-prisma"),
-    },
-    rules: {
-      "prisma/naming-convention-models": "warn",
-      "prisma/naming-convention-enums": "warn",
-      "prisma/naming-convention-fields": "warn",
-    },
-  },
 ];
