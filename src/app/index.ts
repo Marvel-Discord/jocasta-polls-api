@@ -3,7 +3,6 @@ import express from "express";
 
 import { apiRouter } from "@/routes";
 import config from "@/config";
-import { createServer } from "node:http";
 import { initializeAuth } from "@/auth/passport";
 
 export async function createApp() {
@@ -55,11 +54,5 @@ export async function createApp() {
 
   app.use(apiRouter);
 
-  const server = createServer(app);
-
-  server.listen(config.api.port, "0.0.0.0", () => {
-    console.log(`⚡[server]: Server is running on port ${config.api.port}`);
-  });
-
-  return {};
+  return app;
 }
