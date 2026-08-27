@@ -8,6 +8,7 @@ process.env.DISCORD_BOT_TOKEN ||= "test-bot-token";
 process.env.EXPRESS_SESSION_SECRET ||= "test-session-secret";
 process.env.GUILD_ID ||= "0";
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:1/test";
+process.env.BOT_SERVICE_TOKEN ||= "test-bot-service-token";
 
 vi.mock("@/client", () => ({
   prisma: {
