@@ -5,7 +5,7 @@ import type { Express } from "express";
 import { createApp } from "@/app";
 
 let app: Express;
-const TOKEN = "test-bot-service-token";
+const TOKEN = process.env.BOT_SERVICE_TOKEN!;
 
 beforeAll(async () => {
   app = await createApp();

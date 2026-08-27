@@ -38,7 +38,7 @@ describe.each(stubs)("stub $method $path", ({ method, path }) => {
   it("returns 501 with a message", async () => {
     const response = await request(app)[method](path).set(
       "Authorization",
-      "Bearer test-bot-service-token",
+      `Bearer ${process.env.BOT_SERVICE_TOKEN}`,
     );
     expect(response.status).toBe(501);
     expect(response.body).toEqual({ message: "Not implemented" });
