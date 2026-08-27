@@ -36,7 +36,10 @@ const stubs: Array<{ method: "get" | "post"; path: string }> = [
 
 describe.each(stubs)("stub $method $path", ({ method, path }) => {
   it("returns 501 with a message", async () => {
-    const response = await request(app)[method](path);
+    const response = await request(app)[method](path).set(
+      "Authorization",
+      "Bearer test-bot-service-token",
+    );
     expect(response.status).toBe(501);
     expect(response.body).toEqual({ message: "Not implemented" });
   });
