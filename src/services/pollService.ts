@@ -78,7 +78,7 @@ function createPaginationMeta(
  * Tallies votes for a poll and returns the poll with vote counts
  */
 function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votesRelation, ...restPoll } = poll;
+  const { votesRelation, start_time, ...restPoll } = poll;
   const voteTally = new Array(poll.choices.length).fill(0);
 
   for (const vote of votesRelation) {
@@ -91,6 +91,7 @@ function tallyPollVotes(poll: PollWithVotes): Poll {
 
   return {
     ...restPoll,
+    time: start_time,
     votes: voteTally,
     total_votes: totalVotes,
   };
@@ -296,7 +297,7 @@ async function handleSpecialOrderingQueries({
 }
 
 /**
- * Handles vote count ordering using polls_view for efficient database-level sorting
+ * Handles vote count ordering via grouped vote counts per poll
  */
 async function handleVoteOrderedQuery({
   filters,
@@ -309,18 +310,27 @@ async function handleVoteOrderedQuery({
   offset: number;
   orderDir?: OrderDir;
 }): Promise<{ data: Poll[] }> {
-  // Use polls_view for efficient vote count sorting at database level
-  const pollsFromView = await prisma.polls_view.findMany({
+  const pollIdRows = await prisma.polls.findMany({
     where: filters,
-    take: limit,
-    skip: offset,
-    orderBy: {
-      vote_count: getOrderDirection(orderDir),
-    },
+    select: { id: true },
   });
+  const ids = pollIdRows.map((p) => p.id);
 
-  // Get the poll IDs to fetch full poll data with vote details
-  const pollIds = pollsFromView.map((p) => p.id);
+  const countRows = await prisma.pollsvotes.groupBy({
+    by: ["poll_id"],
+    _count: { _all: true },
+    where: { poll_id: { in: ids } },
+  });
+  const countMap = new Map(countRows.map((r) => [r.poll_id, r._count._all]));
+
+  const direction = getOrderDirection(orderDir);
+  const pollIds = ids
+    .sort((a, b) =>
+      direction === "asc"
+        ? (countMap.get(a) ?? 0) - (countMap.get(b) ?? 0)
+        : (countMap.get(b) ?? 0) - (countMap.get(a) ?? 0)
+    )
+    .slice(offset, offset + limit);
 
   const polls = await prisma.polls.findMany({
     where: {
@@ -335,7 +345,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  // Create a map for efficient lookup and maintain sort order from polls_view
+  // Create a map for efficient lookup and maintain vote-count sort order
   const pollMap = new Map(polls.map((poll) => [poll.id, poll]));
   const orderedPolls = pollIds.map((id) => pollMap.get(id)!);
 
@@ -430,7 +440,7 @@ async function handleTimeOrderedQuery({
   limit: number;
   orderDir?: OrderDir;
 }): Promise<Poll[]> {
-  const orderBy = { time: getOrderDirection(orderDir) };
+  const orderBy = { start_time: getOrderDirection(orderDir) };
 
   return await prisma.polls
     .findMany({
@@ -486,9 +496,9 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votesRelation, ...restPoll } = poll;
+    const { votesRelation, start_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, total_votes: totalVotes };
+    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   }
 
   return tallyPollVotes(poll);
@@ -518,8 +528,8 @@ export async function getPollsFromList(
     if (managementOverride) {
       return tallyPollVotes(poll);
     }
-    const { votesRelation, ...restPoll } = poll;
+    const { votesRelation, start_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, total_votes: totalVotes };
+    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   });
 }

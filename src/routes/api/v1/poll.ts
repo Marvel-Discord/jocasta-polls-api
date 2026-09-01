@@ -282,7 +282,7 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
             active: false, // Always false initially like bot
             guild_id: poll.guild_id,
             choices: poll.choices,
-            time: poll.time ? new Date(poll.time) : null,
+            start_time: poll.time ? new Date(poll.time) : null,
             num: null, // Set later when published
             message_id: null, // Set later when published
             crosspost_message_ids: [], // Empty initially
@@ -381,7 +381,7 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
             show_voting: poll.show_voting,
             fallback: poll.fallback,
             // Only update these if provided (preserve existing values otherwise)
-            ...(poll.time && { time: new Date(poll.time) }),
+            ...(poll.time && { start_time: new Date(poll.time) }),
             ...(poll.num !== undefined && { num: poll.num }),
             ...(poll.message_id && { message_id: BigInt(poll.message_id) }),
             ...(poll.crosspost_message_ids && {
