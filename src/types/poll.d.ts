@@ -5,7 +5,7 @@ export interface Poll {
   active: boolean;
   guild_id: bigint;
   choices: string[];
-  votes: number[]?;
+  votes: number[] | null;
   total_votes: number;
   /** Compatibility alias for start_time (website); removable once the website reads start_time. */
   time: Date | null;

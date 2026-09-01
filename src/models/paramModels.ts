@@ -138,6 +138,12 @@ export async function parsePollFilterParams(
     );
   }
 
+  // Cross-param validation: 'ids' and 'userId' each constrain the poll id
+  // set in incompatible ways, so combining them is rejected outright.
+  if (result.data.ids !== undefined && result.data.userId !== undefined) {
+    throw new BadRequestError("'ids' cannot be combined with 'userId'");
+  }
+
   // Additional validation for orderDir/seed depending on order
   const parsed: PollFilterParams = {
     published: result.data.published,

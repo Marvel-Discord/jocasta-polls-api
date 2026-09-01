@@ -118,6 +118,38 @@ describe("parsePollFilterParams order=random conflicts", () => {
   });
 });
 
+describe("parsePollFilterParams ids/userId conflicts", () => {
+  it("rejects ids combined with userId", async () => {
+    const promise = parsePollFilterParams({
+      ids: "12345,67890",
+      userId: "111111111111111111",
+    } as unknown as PollFilterParams);
+
+    await expect(promise).rejects.toBeInstanceOf(BadRequestError);
+    await expect(promise).rejects.toThrow(
+      "'ids' cannot be combined with 'userId'"
+    );
+  });
+
+  it("parses ids alone", async () => {
+    const parsed = await parsePollFilterParams({
+      ids: "12345,67890",
+    } as unknown as PollFilterParams);
+
+    expect(parsed.ids).toEqual([12345, 67890]);
+    expect(parsed.userId).toBeUndefined();
+  });
+
+  it("parses userId alone", async () => {
+    const parsed = await parsePollFilterParams({
+      userId: "111111111111111111",
+    } as unknown as PollFilterParams);
+
+    expect(parsed.userId).toBe(111111111111111111n);
+    expect(parsed.ids).toBeUndefined();
+  });
+});
+
 describe("mergeAuxFilters", () => {
   it("plain-merges when neither side has an OR", () => {
     expect(
