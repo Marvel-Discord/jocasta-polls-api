@@ -297,7 +297,7 @@ async function handleSpecialOrderingQueries({
 }
 
 /**
- * Handles vote count ordering via grouped vote counts per poll
+ * Handles vote count ordering with database-level count sorting
  */
 async function handleVoteOrderedQuery({
   filters,
@@ -310,31 +310,12 @@ async function handleVoteOrderedQuery({
   offset: number;
   orderDir?: OrderDir;
 }): Promise<{ data: Poll[] }> {
-  const pollIdRows = await prisma.polls.findMany({
-    where: filters,
-    select: { id: true },
-  });
-  const ids = pollIdRows.map((p) => p.id);
-
-  const countRows = await prisma.pollsvotes.groupBy({
-    by: ["poll_id"],
-    _count: { _all: true },
-    where: { poll_id: { in: ids } },
-  });
-  const countMap = new Map(countRows.map((r) => [r.poll_id, r._count._all]));
-
-  const direction = getOrderDirection(orderDir);
-  const pollIds = ids
-    .sort((a, b) =>
-      direction === "asc"
-        ? (countMap.get(a) ?? 0) - (countMap.get(b) ?? 0)
-        : (countMap.get(b) ?? 0) - (countMap.get(a) ?? 0)
-    )
-    .slice(offset, offset + limit);
-
   const polls = await prisma.polls.findMany({
-    where: {
-      id: { in: pollIds },
+    where: filters,
+    take: limit,
+    skip: offset,
+    orderBy: {
+      votesRelation: { _count: getOrderDirection(orderDir) },
     },
     include: {
       votesRelation: {
@@ -345,11 +326,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  // Create a map for efficient lookup and maintain vote-count sort order
-  const pollMap = new Map(polls.map((poll) => [poll.id, poll]));
-  const orderedPolls = pollIds.map((id) => pollMap.get(id)!);
-
-  return { data: orderedPolls.map(tallyPollVotes) };
+  return { data: polls.map(tallyPollVotes) };
 }
 
 /**
