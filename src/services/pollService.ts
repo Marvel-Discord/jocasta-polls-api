@@ -1,4 +1,4 @@
-import { Prisma, type polls } from "@prisma/client";
+import { Prisma, type polls } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
@@ -78,7 +78,7 @@ function createPaginationMeta(
  * Tallies votes for a poll and returns the poll with vote counts
  */
 function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votesRelation, ...restPoll } = poll;
+  const { votesRelation, start_time, end_time, ...restPoll } = poll;
   const voteTally = new Array(poll.choices.length).fill(0);
 
   for (const vote of votesRelation) {
@@ -91,6 +91,7 @@ function tallyPollVotes(poll: PollWithVotes): Poll {
 
   return {
     ...restPoll,
+    time: start_time,
     votes: voteTally,
     total_votes: totalVotes,
   };
@@ -296,7 +297,7 @@ async function handleSpecialOrderingQueries({
 }
 
 /**
- * Handles vote count ordering using polls_view for efficient database-level sorting
+ * Handles vote count ordering with database-level count sorting
  */
 async function handleVoteOrderedQuery({
   filters,
@@ -309,22 +310,12 @@ async function handleVoteOrderedQuery({
   offset: number;
   orderDir?: OrderDir;
 }): Promise<{ data: Poll[] }> {
-  // Use polls_view for efficient vote count sorting at database level
-  const pollsFromView = await prisma.polls_view.findMany({
+  const polls = await prisma.polls.findMany({
     where: filters,
     take: limit,
     skip: offset,
     orderBy: {
-      vote_count: getOrderDirection(orderDir),
-    },
-  });
-
-  // Get the poll IDs to fetch full poll data with vote details
-  const pollIds = pollsFromView.map((p) => p.id);
-
-  const polls = await prisma.polls.findMany({
-    where: {
-      id: { in: pollIds },
+      votesRelation: { _count: getOrderDirection(orderDir) },
     },
     include: {
       votesRelation: {
@@ -335,11 +326,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  // Create a map for efficient lookup and maintain sort order from polls_view
-  const pollMap = new Map(polls.map((poll) => [poll.id, poll]));
-  const orderedPolls = pollIds.map((id) => pollMap.get(id)!);
-
-  return { data: orderedPolls.map(tallyPollVotes) };
+  return { data: polls.map(tallyPollVotes) };
 }
 
 /**
@@ -430,7 +417,7 @@ async function handleTimeOrderedQuery({
   limit: number;
   orderDir?: OrderDir;
 }): Promise<Poll[]> {
-  const orderBy = { time: getOrderDirection(orderDir) };
+  const orderBy = { start_time: getOrderDirection(orderDir) };
 
   return await prisma.polls
     .findMany({
@@ -486,9 +473,9 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votesRelation, ...restPoll } = poll;
+    const { votesRelation, start_time, end_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, total_votes: totalVotes };
+    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   }
 
   return tallyPollVotes(poll);
@@ -518,8 +505,8 @@ export async function getPollsFromList(
     if (managementOverride) {
       return tallyPollVotes(poll);
     }
-    const { votesRelation, ...restPoll } = poll;
+    const { votesRelation, start_time, end_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
-    return { ...restPoll, votes: null, total_votes: totalVotes };
+    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   });
 }
