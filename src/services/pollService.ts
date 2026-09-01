@@ -1,4 +1,4 @@
-import { Prisma, type polls } from "@prisma/client";
+import { Prisma, type polls } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
