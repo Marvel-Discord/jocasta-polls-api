@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPollAuxFilters } from "@/services/pollService";
+import { BadRequestError } from "@/errors";
+import {
+  type PollFilterParams,
+  parsePollFilterParams,
+} from "@/models/paramModels";
+import { buildPollAuxFilters, mergeAuxFilters } from "@/services/pollService";
 
 describe("buildPollAuxFilters", () => {
   it("returns an empty object for empty params", () => {
@@ -77,5 +82,103 @@ describe("buildPollAuxFilters", () => {
       guild_id: 123n,
       start_time: { not: null },
     });
+  });
+});
+
+describe("parsePollFilterParams order=random conflicts", () => {
+  it.each([
+    [{ num: 7 }],
+    [{ state: "start" as const }],
+    [{ state: "end" as const }],
+    [{ active_or_persistent: "true" }],
+    [{ active_or_persistent: "false" }],
+  ])("rejects order=random with %o", async (extra) => {
+    const promise = parsePollFilterParams({
+      order: "random",
+      ...extra,
+    } as unknown as PollFilterParams);
+
+    await expect(promise).rejects.toBeInstanceOf(BadRequestError);
+    await expect(promise).rejects.toThrow(
+      "'num', 'state', and 'active_or_persistent' are not supported with order=random"
+    );
+  });
+
+  it("accepts order=random with ids alone", async () => {
+    const parsed = await parsePollFilterParams({
+      order: "random",
+      ids: "12345,67890",
+    } as unknown as PollFilterParams);
+
+    expect(parsed.order).toBe("random");
+    expect(parsed.ids).toEqual([12345, 67890]);
+    expect(parsed.num).toBeUndefined();
+    expect(parsed.state).toBeUndefined();
+    expect(parsed.active_or_persistent).toBeUndefined();
+  });
+});
+
+describe("mergeAuxFilters", () => {
+  it("plain-merges when neither side has an OR", () => {
+    expect(
+      mergeAuxFilters({ published: true, guild_id: 123n }, { num: 7 }),
+    ).toEqual({
+      published: true,
+      guild_id: 123n,
+      num: 7,
+    });
+  });
+
+  it("preserves a base-only OR", () => {
+    const baseOr = [{ question: { contains: "comic" } }];
+
+    expect(mergeAuxFilters({ OR: baseOr }, { num: 7 })).toEqual({
+      OR: baseOr,
+      num: 7,
+    });
+  });
+
+  it("preserves an aux-only OR", () => {
+    const auxOr = [{ active: true }, { tagRelation: { persistent: true } }];
+
+    expect(mergeAuxFilters({ published: true }, { OR: auxOr })).toEqual({
+      published: true,
+      OR: auxOr,
+    });
+  });
+
+  it("lifts colliding ORs into AND groups with both preserved", () => {
+    const baseOr = [{ question: { contains: "comic" } }];
+    const auxOr = [{ active: true }, { tagRelation: { persistent: true } }];
+
+    const merged = mergeAuxFilters(
+      { published: true, OR: baseOr },
+      { num: 3, OR: auxOr },
+    );
+
+    expect(merged).toEqual({
+      published: true,
+      num: 3,
+      AND: [{ OR: baseOr }, { OR: auxOr }],
+    });
+    expect(merged.OR).toBeUndefined();
+  });
+
+  it("keeps existing base AND entries when lifting colliding ORs", () => {
+    const baseOr = [{ question: { contains: "comic" } }];
+    const auxOr = [{ active: true }];
+
+    const merged = mergeAuxFilters(
+      { AND: [{ num: 1 }], OR: baseOr },
+      { OR: auxOr },
+    );
+
+    expect(merged.AND).toEqual([{ num: 1 }, { OR: baseOr }, { OR: auxOr }]);
+  });
+
+  it("aux non-OR keys still win over the base keys", () => {
+    expect(
+      mergeAuxFilters({ published: true }, { published: false, num: 42 }),
+    ).toEqual({ published: false, num: 42 });
   });
 });

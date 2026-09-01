@@ -158,6 +158,15 @@ export async function parsePollFilterParams(
 
     // validate orderDir/seed
     if (result.data.order === "random") {
+      if (
+        result.data.num !== undefined ||
+        result.data.state !== undefined ||
+        result.data.active_or_persistent !== undefined
+      ) {
+        throw new BadRequestError(
+          "'num', 'state', and 'active_or_persistent' are not supported with order=random"
+        );
+      }
       if (result.data.seed !== undefined) {
         if (!/^-?\d+$/.test(result.data.seed)) {
           throw new BadRequestError("seed must be an integer for random order");

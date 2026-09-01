@@ -182,6 +182,33 @@ export function buildPollAuxFilters(params: {
 }
 
 /**
+ * Merges the bot-facing aux filters into the base filters (aux-last so
+ * `state`'s published/active coupling is never clobbered). When both sides
+ * carry a top-level OR (`search` and `active_or_persistent`), each is lifted
+ * into its own AND group so neither silently drops the other.
+ */
+export function mergeAuxFilters(
+  base: Prisma.PollWhereInput,
+  aux: Prisma.PollWhereInput,
+): Prisma.PollWhereInput {
+  const merged = { ...base };
+  if (aux.OR && merged.OR) {
+    const baseOr = merged.OR;
+    delete merged.OR;
+    merged.AND = [
+      ...((merged.AND as Prisma.PollWhereInput[]) ?? []),
+      { OR: baseOr },
+      { OR: aux.OR },
+    ];
+    const { OR: _auxOr, ...restAux } = aux;
+    Object.assign(merged, restAux);
+  } else {
+    Object.assign(merged, aux);
+  }
+  return merged;
+}
+
+/**
  * Gets poll IDs that a user has voted on, with optional filtering
  */
 async function getUserVotedPollIds(user?: PollFilterUser) {
@@ -237,16 +264,16 @@ export async function getPolls({
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
   // aux filters are merged last: `state` sets published/active and must not
   // be clobbered by the base builder's keys
-  const filters = {
-    ...buildPollFilters({
+  const filters = mergeAuxFilters(
+    buildPollFilters({
       published,
       guildId,
       tag,
       user,
       searchQuery,
     }),
-    ...buildPollAuxFilters({ ids, num, state, active_or_persistent }),
-  };
+    buildPollAuxFilters({ ids, num, state, active_or_persistent }),
+  );
 
   // Get total count for pagination
   const total = await prisma.poll.count({ where: filters });
