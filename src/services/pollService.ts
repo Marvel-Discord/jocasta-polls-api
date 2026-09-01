@@ -32,7 +32,7 @@ interface PollFilters {
 /**
  * Extended poll type that includes vote relation data for processing
  */
-type PollWithVotes = PollModel & { votesRelation: { choice: number }[] };
+type PollWithVotes = PollModel & { votes: { choice: number }[] };
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -78,10 +78,10 @@ function createPaginationMeta(
  * Tallies votes for a poll and returns the poll with vote counts
  */
 function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votesRelation, start_time, end_time, ...restPoll } = poll;
+  const { votes, start_time, end_time, ...restPoll } = poll;
   const voteTally = new Array(poll.choices.length).fill(0);
 
-  for (const vote of votesRelation) {
+  for (const vote of votes) {
     if (vote.choice >= 0 && vote.choice < voteTally.length) {
       voteTally[vote.choice]++;
     }
@@ -117,7 +117,7 @@ function buildPollFilters(options: {
     ...(tag !== undefined ? { tag } : {}),
     ...(user
       ? {
-          votesRelation: user.notVoted
+          votes: user.notVoted
             ? { none: { user_id: user.userId } }
             : { some: { user_id: user.userId } },
         }
@@ -315,10 +315,10 @@ async function handleVoteOrderedQuery({
     take: limit,
     skip: offset,
     orderBy: {
-      votesRelation: { _count: getOrderDirection(orderDir) },
+      votes: { _count: getOrderDirection(orderDir) },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -385,7 +385,7 @@ async function handleRandomOrderedQuery({
       id: { in: pollIds.map((p) => p.id) },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -426,7 +426,7 @@ async function handleTimeOrderedQuery({
       skip: (page - 1) * limit,
       orderBy,
       include: {
-        votesRelation: {
+        votes: {
           select: {
             choice: true,
           },
@@ -462,7 +462,7 @@ export async function getPollById(
   const poll = await prisma.poll.findUnique({
     where: { id },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -473,8 +473,8 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votesRelation, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votesRelation.length;
+    const { votes, start_time, end_time, ...restPoll } = poll;
+    const totalVotes = votes.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   }
 
@@ -493,7 +493,7 @@ export async function getPollsFromList(
       id: { in: pollIds },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -505,8 +505,8 @@ export async function getPollsFromList(
     if (managementOverride) {
       return tallyPollVotes(poll);
     }
-    const { votesRelation, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votesRelation.length;
+    const { votes, start_time, end_time, ...restPoll } = poll;
+    const totalVotes = votes.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   });
 }
