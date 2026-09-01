@@ -36,7 +36,10 @@ interface PollFilters {
 /**
  * Extended poll type that includes vote relation data for processing
  */
-type PollWithVotes = PollModel & { votes: { choice: number }[] };
+type PollWithVotes = PollModel & {
+  votes: { choice: number }[];
+  tagRelation?: unknown;
+};
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -84,7 +87,7 @@ function createPaginationMeta(
  * the compatibility alias for start_time (website; removable post-migration)
  */
 export function serializePoll(poll: PollWithVotes): Poll {
-  const { votes, start_time, end_time, ...restPoll } = poll;
+  const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
   const totalVotes = votes.length;
   const voteCounts = new Array<number>(restPoll.choices.length).fill(0);
   for (const vote of votes) {
@@ -246,7 +249,7 @@ function getOrderDirection(orderDir?: OrderDir): "asc" | "desc" {
  */
 export async function getPolls({
   guildId,
-  published = true,
+  published,
   tag,
   ids,
   num,

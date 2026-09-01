@@ -28,6 +28,7 @@ type PollFixture = Omit<typeof BASE_POLL, "start_time" | "end_time"> & {
   start_time: Date | null;
   end_time: Date | null;
   votes: { choice: number }[];
+  tagRelation?: null;
 };
 
 function makePoll(overrides: Partial<PollFixture> = {}): PollFixture {
@@ -99,13 +100,19 @@ describe("serializePoll", () => {
   });
 
   it("passes null start/end through and strips relation fields from output", () => {
-    const poll = makePoll({ start_time: null, end_time: null, votes: [{ choice: 2 }] });
+    const poll = makePoll({
+      start_time: null,
+      end_time: null,
+      votes: [{ choice: 2 }],
+      tagRelation: null,
+    });
     const result = serializePoll(poll);
 
     expect(result.start_time).toBeNull();
     expect(result.end_time).toBeNull();
     expect(result.time).toBeNull();
     expect(Object.keys(result).sort()).toEqual(CONTRACT_KEYS);
+    expect(result).not.toHaveProperty("tagRelation");
     expect(result.votes).toEqual([0, 0, 1]);
     expect(result.votes?.every((count) => typeof count === "number")).toBe(true);
   });

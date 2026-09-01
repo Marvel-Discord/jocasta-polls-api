@@ -14,7 +14,7 @@ beforeAll(async () => {
 describe("bot service token auth", () => {
   it("returns 501 for a valid token (stub beneath the gate)", async () => {
     const response = await request(app)
-      .get("/api/v1/bot/polls")
+      .get("/api/v1/bot/tags")
       .set("Authorization", `Bearer ${TOKEN}`);
     expect(response.status).toBe(501);
   });
@@ -56,7 +56,7 @@ describe("bot service token auth", () => {
 
   it("accepts a snowflake X-Discord-User-Id (still 501)", async () => {
     const response = await request(app)
-      .get("/api/v1/bot/polls")
+      .get("/api/v1/bot/tags")
       .set("Authorization", `Bearer ${TOKEN}`)
       .set("X-Discord-User-Id", "281648235557421056");
     expect(response.status).toBe(501);
