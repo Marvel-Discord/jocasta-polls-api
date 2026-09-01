@@ -6,7 +6,7 @@
   ],
   "settings": {
     "eslint.format.enable": false,
-    "cSpell.words": ["pollstags"],
+    "cSpell.words": ["guild_settings"],
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true
