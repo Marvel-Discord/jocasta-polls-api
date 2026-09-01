@@ -78,7 +78,7 @@ function createPaginationMeta(
  * Tallies votes for a poll and returns the poll with vote counts
  */
 function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votesRelation, start_time, ...restPoll } = poll;
+  const { votesRelation, start_time, end_time, ...restPoll } = poll;
   const voteTally = new Array(poll.choices.length).fill(0);
 
   for (const vote of votesRelation) {
@@ -496,7 +496,7 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votesRelation, start_time, ...restPoll } = poll;
+    const { votesRelation, start_time, end_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   }
@@ -528,7 +528,7 @@ export async function getPollsFromList(
     if (managementOverride) {
       return tallyPollVotes(poll);
     }
-    const { votesRelation, start_time, ...restPoll } = poll;
+    const { votesRelation, start_time, end_time, ...restPoll } = poll;
     const totalVotes = votesRelation.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   });
