@@ -56,6 +56,17 @@ const PollFilterParamsModel = z
     orderDir: z.enum([OrderDir.Asc, OrderDir.Desc]).optional(),
     // seed for random ordering (string form will be coerced to number)
     seed: z.string().optional(),
+    // comma-separated poll ids, e.g. ids=12345,67890
+    ids: z
+      .string()
+      .refine((val) => /^(\d+)(,\d+)*$/.test(val), {
+        message: "ids must be a comma-separated list of positive integers",
+      })
+      .transform((val) => val.split(",").map(Number))
+      .optional(),
+    num: IntFilter.optional(),
+    state: z.enum(["start", "end"]).optional(),
+    active_or_persistent: BooleanFilter.optional(),
     ...PaginationModel.shape,
   })
   .refine((data) => !(data.notVoted && !data.userId), {
@@ -103,6 +114,10 @@ export interface PollFilterParams {
   userId?: bigint;
   notVoted?: boolean;
   search?: string;
+  ids?: number[];
+  num?: number;
+  state?: "start" | "end";
+  active_or_persistent?: boolean;
 
   page?: number;
   limit?: number;
@@ -130,6 +145,10 @@ export async function parsePollFilterParams(
     userId: result.data.userId,
     notVoted: result.data.notVoted,
     search: result.data.search,
+    ids: result.data.ids,
+    num: result.data.num,
+    state: result.data.state,
+    active_or_persistent: result.data.active_or_persistent,
     page: result.data.page,
     limit: result.data.limit,
   };

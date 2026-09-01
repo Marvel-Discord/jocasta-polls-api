@@ -43,6 +43,10 @@ pollRouter.get("/", async (req, res) => {
       userId,
       notVoted,
       search,
+      ids,
+      num,
+      state,
+      active_or_persistent,
       page,
       limit,
       order,
@@ -63,6 +67,10 @@ pollRouter.get("/", async (req, res) => {
       guildId: guildId,
       published: hasManagementPerms ? published : true,
       tag,
+      ids,
+      num,
+      state,
+      active_or_persistent,
       user: userId
         ? {
             userId: userId,

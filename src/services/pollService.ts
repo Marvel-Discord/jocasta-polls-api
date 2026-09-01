@@ -19,6 +19,10 @@ interface PollFilters {
   guildId: bigint;
   published?: boolean;
   tag?: number;
+  ids?: number[];
+  num?: number;
+  state?: "start" | "end";
+  active_or_persistent?: boolean;
   user?: PollFilterUser;
   search?: string;
   page?: number;
@@ -146,6 +150,38 @@ function buildPollFilters(options: {
 }
 
 /**
+ * Builds a Prisma where-input fragment for the bot-facing aux list filters
+ * (ids, num, state, active_or_persistent). Pure — no DB access — so it can
+ * be unit tested directly and composed into the list path's filters object.
+ *
+ * `state` couples a time check with `published`/`active`, so this fragment
+ * must be merged AFTER (and never overridden by) the base builder's keys.
+ */
+export function buildPollAuxFilters(params: {
+  ids?: number[];
+  num?: number;
+  state?: "start" | "end";
+  active_or_persistent?: boolean;
+}): Prisma.PollWhereInput {
+  const aux: Prisma.PollWhereInput = {};
+  if (params.ids?.length) aux.id = { in: params.ids };
+  if (params.num !== undefined) aux.num = params.num;
+  if (params.state === "start") {
+    // scheduled, not yet started
+    aux.start_time = { not: null };
+    aux.published = false;
+  } else if (params.state === "end") {
+    // running with an end scheduled
+    aux.end_time = { not: null };
+    aux.active = true;
+  }
+  if (params.active_or_persistent === true) {
+    aux.OR = [{ active: true }, { tagRelation: { persistent: true } }];
+  }
+  return aux;
+}
+
+/**
  * Gets poll IDs that a user has voted on, with optional filtering
  */
 async function getUserVotedPollIds(user?: PollFilterUser) {
@@ -185,6 +221,10 @@ export async function getPolls({
   guildId,
   published = true,
   tag,
+  ids,
+  num,
+  state,
+  active_or_persistent,
   user,
   search,
   page = 1,
@@ -195,13 +235,18 @@ export async function getPolls({
   seed,
 }: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
-  const filters = buildPollFilters({
-    published,
-    guildId,
-    tag,
-    user,
-    searchQuery,
-  });
+  // aux filters are merged last: `state` sets published/active and must not
+  // be clobbered by the base builder's keys
+  const filters = {
+    ...buildPollFilters({
+      published,
+      guildId,
+      tag,
+      user,
+      searchQuery,
+    }),
+    ...buildPollAuxFilters({ ids, num, state, active_or_persistent }),
+  };
 
   // Get total count for pagination
   const total = await prisma.poll.count({ where: filters });
