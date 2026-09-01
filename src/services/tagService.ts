@@ -2,7 +2,7 @@ import { prisma } from "@/client";
 import type { Tag } from "@/types";
 
 export async function getTags(publishedOnly = false): Promise<Tag[]> {
-	const tags = await prisma.pollstags.findMany({
+	const tags = await prisma.tag.findMany({
 		include: {
 			pollsRelation: {
 				where: publishedOnly ? { published: true } : {},
@@ -28,7 +28,7 @@ export async function getTags(publishedOnly = false): Promise<Tag[]> {
 }
 
 export async function getTagById(id: number): Promise<Tag | null> {
-	const tag = await prisma.pollstags.findUnique({
+	const tag = await prisma.tag.findUnique({
 		where: {
 			tag: id,
 		},

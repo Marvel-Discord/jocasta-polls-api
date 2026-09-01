@@ -5,7 +5,7 @@ export async function getVote(
   pollId: number,
   userId: bigint
 ): Promise<Vote | null> {
-  const vote = await prisma.pollsvotes.findFirst({
+  const vote = await prisma.vote.findFirst({
     where: {
       poll_id: pollId,
       user_id: userId,
@@ -21,7 +21,7 @@ export async function getVotesByPoll(
   pollId: number,
   managementOverride = false
 ): Promise<{ choice: number; votes: number }[] | null> {
-  const poll = await prisma.polls.findUnique({
+  const poll = await prisma.poll.findUnique({
     where: { id: pollId },
     select: { show_voting: true },
   });
@@ -34,7 +34,7 @@ export async function getVotesByPoll(
     throw new Error("Votes are not visible for this poll");
   }
 
-  const votes = await prisma.pollsvotes.groupBy({
+  const votes = await prisma.vote.groupBy({
     by: ["choice"],
     where: {
       poll_id: pollId,
@@ -51,7 +51,7 @@ export async function getVotesByPoll(
 }
 
 export async function getVotesByUser(userId: bigint): Promise<Vote[]> {
-  const votes = await prisma.pollsvotes.findMany({
+  const votes = await prisma.vote.findMany({
     where: {
       user_id: userId,
     },

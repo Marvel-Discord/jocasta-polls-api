@@ -47,7 +47,7 @@ tagRouter.post("/create", requireManagementPerms, async (req, res) => {
     }
 
     // Check for duplicate names within the same guild
-    const existingTag = await prisma.pollstags.findFirst({
+    const existingTag = await prisma.tag.findFirst({
       where: {
         guild_id: BigInt(tagData.guild_id),
         name: tagData.name,
@@ -64,13 +64,13 @@ tagRouter.post("/create", requireManagementPerms, async (req, res) => {
     let tagId: number;
     while (true) {
       tagId = Math.floor(Math.random() * 90000) + 10000; // 10000-99999 like polls
-      const existing = await prisma.pollstags.findUnique({
+      const existing = await prisma.tag.findUnique({
         where: { tag: tagId },
       });
       if (!existing) break;
     }
 
-    const createdTag = await prisma.pollstags.create({
+    const createdTag = await prisma.tag.create({
       data: {
         tag: tagId,
         name: tagData.name,
