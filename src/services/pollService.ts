@@ -75,25 +75,26 @@ function createPaginationMeta(
 }
 
 /**
- * Tallies votes for a poll and returns the poll with vote counts
+ * Serializes a poll with its vote relation into the API contract shape:
+ * tallies votes per choice, emits start_time/end_time, and keeps time as
+ * the compatibility alias for start_time (website; removable post-migration)
  */
-function tallyPollVotes(poll: PollWithVotes): Poll {
+export function serializePoll(poll: PollWithVotes): Poll {
   const { votes, start_time, end_time, ...restPoll } = poll;
-  const voteTally = new Array(poll.choices.length).fill(0);
-
+  const totalVotes = votes.length;
+  const voteCounts = new Array<number>(restPoll.choices.length).fill(0);
   for (const vote of votes) {
-    if (vote.choice >= 0 && vote.choice < voteTally.length) {
-      voteTally[vote.choice]++;
+    if (vote.choice >= 0 && vote.choice < voteCounts.length) {
+      voteCounts[vote.choice] += 1;
     }
   }
-
-  const totalVotes = voteTally.reduce((sum, count) => sum + count, 0);
-
   return {
     ...restPoll,
-    time: start_time,
-    votes: voteTally,
+    votes: voteCounts,
     total_votes: totalVotes,
+    start_time,
+    end_time,
+    time: start_time,
   };
 }
 
@@ -326,7 +327,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  return { data: polls.map(tallyPollVotes) };
+  return { data: polls.map(serializePoll) };
 }
 
 /**
@@ -398,7 +399,7 @@ async function handleRandomOrderedQuery({
   const orderedPolls = pollIds.map(({ id }) => pollMap.get(id)!);
 
   return {
-    data: orderedPolls.map(tallyPollVotes),
+    data: orderedPolls.map(serializePoll),
     randomSeed,
   };
 }
@@ -433,7 +434,7 @@ async function handleTimeOrderedQuery({
         },
       },
     })
-    .then((polls) => polls.map(tallyPollVotes));
+    .then((polls) => polls.map(serializePoll));
 }
 
 /**
@@ -473,12 +474,10 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votes, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votes.length;
-    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
+    return { ...serializePoll(poll), votes: null };
   }
 
-  return tallyPollVotes(poll);
+  return serializePoll(poll);
 }
 
 /**
@@ -503,10 +502,8 @@ export async function getPollsFromList(
 
   return polls.map((poll) => {
     if (managementOverride) {
-      return tallyPollVotes(poll);
+      return serializePoll(poll);
     }
-    const { votes, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votes.length;
-    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
+    return { ...serializePoll(poll), votes: null };
   });
 }

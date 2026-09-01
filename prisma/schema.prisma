@@ -19,7 +19,7 @@ model Poll {
   num                   Int?
   message_id            BigInt?
   crosspost_message_ids BigInt[]
-  tag                   Int
+  tag                   Int?
   image                 String?
   description           String?
   thread_question       String?
