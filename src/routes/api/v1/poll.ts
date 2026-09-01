@@ -159,7 +159,7 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
     }
 
     // Check if user already has a vote for this poll
-    const existingVote = await prisma.pollsvotes.findFirst({
+    const existingVote = await prisma.vote.findFirst({
       where: {
         user_id: BigInt(userId),
         poll_id: pollId,
@@ -169,7 +169,7 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
     // If choice is null/undefined, delete the vote
     if (choice === null || choice === undefined) {
       if (existingVote) {
-        await prisma.pollsvotes.deleteMany({
+        await prisma.vote.deleteMany({
           where: {
             user_id: BigInt(userId),
             poll_id: pollId,
@@ -189,7 +189,7 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
 
     if (existingVote) {
       // Update existing vote
-      await prisma.pollsvotes.update({
+      await prisma.vote.update({
         where: { id: existingVote.id },
         data: { choice: choice },
       });
@@ -201,7 +201,7 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
       const voteId = BigInt(userId) + BigInt(pollId);
 
       // Create new vote
-      await prisma.pollsvotes.create({
+      await prisma.vote.create({
         data: {
           id: voteId,
           user_id: BigInt(userId),
@@ -268,13 +268,13 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
         let pollId: number;
         while (true) {
           pollId = Math.floor(Math.random() * 90000) + 10000; // 10000-99999
-          const existing = await prisma.polls.findUnique({
+          const existing = await prisma.poll.findUnique({
             where: { id: pollId },
           });
           if (!existing) break;
         }
 
-        return await prisma.polls.create({
+        return await prisma.poll.create({
           data: {
             id: pollId,
             question: poll.question,
@@ -366,7 +366,7 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
           throw new NotFoundError(`Poll with id ${poll.id} not found`);
         }
 
-        return await prisma.polls.update({
+        return await prisma.poll.update({
           where: { id: poll.id },
           data: {
             question: poll.question,
@@ -438,7 +438,7 @@ pollRouter.post("/delete", requireManagementPerms, async (req, res) => {
     // Delete polls and related votes from database
     await prisma.$transaction(async (tx) => {
       // First delete all votes for these polls
-      await tx.pollsvotes.deleteMany({
+      await tx.vote.deleteMany({
         where: {
           poll_id: {
             in: pollIds.map(Number),
@@ -447,7 +447,7 @@ pollRouter.post("/delete", requireManagementPerms, async (req, res) => {
       });
 
       // Then delete the polls
-      const deletedPolls = await tx.polls.deleteMany({
+      const deletedPolls = await tx.poll.deleteMany({
         where: {
           id: {
             in: pollIds.map(Number),

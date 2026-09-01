@@ -32,9 +32,9 @@ BEGIN
   INTO actual
   FROM pg_catalog.pg_attribute a
   LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
-  WHERE a.attrelid = 'public.pollsvotes'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
+  WHERE a.attrelid = 'public.votes'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
   IF actual IS DISTINCT FROM expected THEN
-    problems := array_append(problems, 'pollsvotes column signature mismatch: ' || coalesce(actual, '<table missing>'));
+    problems := array_append(problems, 'votes column signature mismatch: ' || coalesce(actual, '<table missing>'));
   END IF;
 
   expected := 'tag|integer|t|;name|text|t|;guild_id|bigint|t|;channel_id|bigint|t|;crosspost_channels|bigint[]|f|;crosspost_servers|bigint[]|f|;current_num|integer|f|;colour|integer|f|;end_message|text|f|;end_message_latest_ids|bigint[]|f|;end_message_replace|boolean|t|false;end_message_role_ids|bigint[]|f|;end_message_ping|boolean|t|false;end_message_self_assign|boolean|t|false;persistent|boolean|t|true';
@@ -42,9 +42,9 @@ BEGIN
   INTO actual
   FROM pg_catalog.pg_attribute a
   LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
-  WHERE a.attrelid = 'public.pollstags'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
+  WHERE a.attrelid = 'public.tags'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
   IF actual IS DISTINCT FROM expected THEN
-    problems := array_append(problems, 'pollstags column signature mismatch: ' || coalesce(actual, '<table missing>'));
+    problems := array_append(problems, 'tags column signature mismatch: ' || coalesce(actual, '<table missing>'));
   END IF;
 
   expected := 'guild_id|bigint|t|;default_channel_id|bigint|t|;manage_channel_id|bigint[]|f|;manager_role_id|bigint[]|t|;default_colour|integer|f|;fallback_channel_id|bigint|f|';
@@ -52,22 +52,22 @@ BEGIN
   INTO actual
   FROM pg_catalog.pg_attribute a
   LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
-  WHERE a.attrelid = 'public.pollsinfo'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
+  WHERE a.attrelid = 'public.guild_settings'::regclass AND a.attnum > 0 AND NOT a.attisdropped;
   IF actual IS DISTINCT FROM expected THEN
-    problems := array_append(problems, 'pollsinfo column signature mismatch: ' || coalesce(actual, '<table missing>'));
+    problems := array_append(problems, 'guild_settings column signature mismatch: ' || coalesce(actual, '<table missing>'));
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'p' AND conname = 'polls_pkey') THEN
     problems := array_append(problems, 'polls_pkey missing');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.pollsvotes'::regclass AND contype = 'p' AND conname = 'pollsvotesnew_pkey') THEN
-    problems := array_append(problems, 'pollsvotesnew_pkey missing');
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.votes'::regclass AND contype = 'p' AND conname = 'votes_pkey') THEN
+    problems := array_append(problems, 'votes_pkey missing');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.pollstags'::regclass AND contype = 'p' AND conname = 'pollstags_pkey') THEN
-    problems := array_append(problems, 'pollstags_pkey missing');
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.tags'::regclass AND contype = 'p' AND conname = 'tags_pkey') THEN
+    problems := array_append(problems, 'tags_pkey missing');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.pollsinfo'::regclass AND contype = 'p' AND conname = 'pollsinfo_pkey') THEN
-    problems := array_append(problems, 'pollsinfo_pkey missing');
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.guild_settings'::regclass AND contype = 'p' AND conname = 'guild_settings_pkey') THEN
+    problems := array_append(problems, 'guild_settings_pkey missing');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'c' AND conname = 'polls_start_before_end') THEN
     problems := array_append(problems, 'polls_start_before_end CHECK missing');

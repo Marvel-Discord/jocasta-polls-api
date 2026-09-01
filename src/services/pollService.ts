@@ -1,4 +1,4 @@
-import { Prisma, type polls } from "@/generated/prisma/client";
+import { Prisma, type Poll as PollModel } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
 import type { Meta, Poll } from "@/types";
@@ -32,7 +32,7 @@ interface PollFilters {
 /**
  * Extended poll type that includes vote relation data for processing
  */
-type PollWithVotes = polls & { votesRelation: { choice: number }[] };
+type PollWithVotes = PollModel & { votes: { choice: number }[] };
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -78,10 +78,10 @@ function createPaginationMeta(
  * Tallies votes for a poll and returns the poll with vote counts
  */
 function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votesRelation, start_time, end_time, ...restPoll } = poll;
+  const { votes, start_time, end_time, ...restPoll } = poll;
   const voteTally = new Array(poll.choices.length).fill(0);
 
-  for (const vote of votesRelation) {
+  for (const vote of votes) {
     if (vote.choice >= 0 && vote.choice < voteTally.length) {
       voteTally[vote.choice]++;
     }
@@ -117,7 +117,7 @@ function buildPollFilters(options: {
     ...(tag !== undefined ? { tag } : {}),
     ...(user
       ? {
-          votesRelation: user.notVoted
+          votes: user.notVoted
             ? { none: { user_id: user.userId } }
             : { some: { user_id: user.userId } },
         }
@@ -150,7 +150,7 @@ function buildPollFilters(options: {
 async function getUserVotedPollIds(user?: PollFilterUser) {
   if (!user) return null;
 
-  const votedPolls = await prisma.pollsvotes.findMany({
+  const votedPolls = await prisma.vote.findMany({
     where: { user_id: user.userId },
     select: { poll_id: true },
   });
@@ -203,7 +203,7 @@ export async function getPolls({
   });
 
   // Get total count for pagination
-  const total = await prisma.polls.count({ where: filters });
+  const total = await prisma.poll.count({ where: filters });
 
   let data: Poll[] = [];
   let randomSeed: number | undefined = undefined;
@@ -310,15 +310,15 @@ async function handleVoteOrderedQuery({
   offset: number;
   orderDir?: OrderDir;
 }): Promise<{ data: Poll[] }> {
-  const polls = await prisma.polls.findMany({
+  const polls = await prisma.poll.findMany({
     where: filters,
     take: limit,
     skip: offset,
     orderBy: {
-      votesRelation: { _count: getOrderDirection(orderDir) },
+      votes: { _count: getOrderDirection(orderDir) },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -380,12 +380,12 @@ async function handleRandomOrderedQuery({
   );
 
   // Fetch full poll data with votes
-  const polls = await prisma.polls.findMany({
+  const polls = await prisma.poll.findMany({
     where: {
       id: { in: pollIds.map((p) => p.id) },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -419,14 +419,14 @@ async function handleTimeOrderedQuery({
 }): Promise<Poll[]> {
   const orderBy = { start_time: getOrderDirection(orderDir) };
 
-  return await prisma.polls
+  return await prisma.poll
     .findMany({
       where: filters,
       take: limit,
       skip: (page - 1) * limit,
       orderBy,
       include: {
-        votesRelation: {
+        votes: {
           select: {
             choice: true,
           },
@@ -459,10 +459,10 @@ export async function getPollById(
   id: number,
   managementOverride: boolean = false
 ): Promise<Poll | null> {
-  const poll = await prisma.polls.findUnique({
+  const poll = await prisma.poll.findUnique({
     where: { id },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -473,8 +473,8 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votesRelation, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votesRelation.length;
+    const { votes, start_time, end_time, ...restPoll } = poll;
+    const totalVotes = votes.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   }
 
@@ -488,12 +488,12 @@ export async function getPollsFromList(
   pollIds: number[],
   managementOverride: boolean = false
 ): Promise<Poll[]> {
-  const polls = await prisma.polls.findMany({
+  const polls = await prisma.poll.findMany({
     where: {
       id: { in: pollIds },
     },
     include: {
-      votesRelation: {
+      votes: {
         select: {
           choice: true,
         },
@@ -505,8 +505,8 @@ export async function getPollsFromList(
     if (managementOverride) {
       return tallyPollVotes(poll);
     }
-    const { votesRelation, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votesRelation.length;
+    const { votes, start_time, end_time, ...restPoll } = poll;
+    const totalVotes = votes.length;
     return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
   });
 }
