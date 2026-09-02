@@ -19,6 +19,12 @@ interface PollFilters {
   guildId: bigint;
   published?: boolean;
   tag?: number;
+  ids?: number[];
+  num?: number;
+  active?: boolean;
+  has_start?: boolean;
+  has_end?: boolean;
+  active_or_persistent?: boolean;
   user?: PollFilterUser;
   search?: string;
   page?: number;
@@ -32,7 +38,10 @@ interface PollFilters {
 /**
  * Extended poll type that includes vote relation data for processing
  */
-type PollWithVotes = PollModel & { votes: { choice: number }[] };
+type PollWithVotes = PollModel & {
+  votes: { choice: number }[];
+  tagRelation?: unknown;
+};
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -75,25 +84,26 @@ function createPaginationMeta(
 }
 
 /**
- * Tallies votes for a poll and returns the poll with vote counts
+ * Serializes a poll with its vote relation into the API contract shape:
+ * tallies votes per choice, emits start_time/end_time, and keeps time as
+ * the compatibility alias for start_time (website; removable post-migration)
  */
-function tallyPollVotes(poll: PollWithVotes): Poll {
-  const { votes, start_time, end_time, ...restPoll } = poll;
-  const voteTally = new Array(poll.choices.length).fill(0);
-
+export function serializePoll(poll: PollWithVotes): Poll {
+  const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
+  const totalVotes = votes.length;
+  const voteCounts = new Array<number>(restPoll.choices.length).fill(0);
   for (const vote of votes) {
-    if (vote.choice >= 0 && vote.choice < voteTally.length) {
-      voteTally[vote.choice]++;
+    if (vote.choice >= 0 && vote.choice < voteCounts.length) {
+      voteCounts[vote.choice] += 1;
     }
   }
-
-  const totalVotes = voteTally.reduce((sum, count) => sum + count, 0);
-
   return {
     ...restPoll,
-    time: start_time,
-    votes: voteTally,
+    votes: voteCounts,
     total_votes: totalVotes,
+    start_time,
+    end_time,
+    time: start_time,
   };
 }
 
@@ -145,6 +155,62 @@ function buildPollFilters(options: {
 }
 
 /**
+ * Builds a Prisma where-input fragment for the bot-facing aux list filters
+ * (ids, num, active, has_start, has_end, active_or_persistent). Pure — no
+ * DB access — so it can be unit tested directly and composed into the list
+ * path's filters object. Each filter is a pure data predicate on a single
+ * column (no lifecycle coupling).
+ */
+export function buildPollAuxFilters(params: {
+  ids?: number[];
+  num?: number;
+  active?: boolean;
+  has_start?: boolean;
+  has_end?: boolean;
+  active_or_persistent?: boolean;
+}): Prisma.PollWhereInput {
+  const aux: Prisma.PollWhereInput = {};
+  if (params.ids?.length) aux.id = { in: params.ids };
+  if (params.num !== undefined) aux.num = params.num;
+  if (params.active !== undefined) aux.active = params.active;
+  if (params.has_start === true) aux.start_time = { not: null };
+  else if (params.has_start === false) aux.start_time = null;
+  if (params.has_end === true) aux.end_time = { not: null };
+  else if (params.has_end === false) aux.end_time = null;
+  if (params.active_or_persistent === true) {
+    aux.OR = [{ active: true }, { tagRelation: { persistent: true } }];
+  }
+  return aux;
+}
+
+/**
+ * Merges the bot-facing aux filters into the base filters (aux last, so
+ * aux keys win on collision). When both sides carry a top-level OR
+ * (`search` and `active_or_persistent`), each is lifted into its own AND
+ * group so neither silently drops the other.
+ */
+export function mergeAuxFilters(
+  base: Prisma.PollWhereInput,
+  aux: Prisma.PollWhereInput,
+): Prisma.PollWhereInput {
+  const merged = { ...base };
+  if (aux.OR && merged.OR) {
+    const baseOr = merged.OR;
+    delete merged.OR;
+    merged.AND = [
+      ...((merged.AND as Prisma.PollWhereInput[]) ?? []),
+      { OR: baseOr },
+      { OR: aux.OR },
+    ];
+    const { OR: _auxOr, ...restAux } = aux;
+    Object.assign(merged, restAux);
+  } else {
+    Object.assign(merged, aux);
+  }
+  return merged;
+}
+
+/**
  * Gets poll IDs that a user has voted on, with optional filtering
  */
 async function getUserVotedPollIds(user?: PollFilterUser) {
@@ -182,8 +248,14 @@ function getOrderDirection(orderDir?: OrderDir): "asc" | "desc" {
  */
 export async function getPolls({
   guildId,
-  published = true,
+  published,
   tag,
+  ids,
+  num,
+  active,
+  has_start,
+  has_end,
+  active_or_persistent,
   user,
   search,
   page = 1,
@@ -194,13 +266,23 @@ export async function getPolls({
   seed,
 }: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
-  const filters = buildPollFilters({
-    published,
-    guildId,
-    tag,
-    user,
-    searchQuery,
-  });
+  const filters = mergeAuxFilters(
+    buildPollFilters({
+      published,
+      guildId,
+      tag,
+      user,
+      searchQuery,
+    }),
+    buildPollAuxFilters({
+      ids,
+      num,
+      active,
+      has_start,
+      has_end,
+      active_or_persistent,
+    }),
+  );
 
   // Get total count for pagination
   const total = await prisma.poll.count({ where: filters });
@@ -326,7 +408,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  return { data: polls.map(tallyPollVotes) };
+  return { data: polls.map(serializePoll) };
 }
 
 /**
@@ -398,7 +480,7 @@ async function handleRandomOrderedQuery({
   const orderedPolls = pollIds.map(({ id }) => pollMap.get(id)!);
 
   return {
-    data: orderedPolls.map(tallyPollVotes),
+    data: orderedPolls.map(serializePoll),
     randomSeed,
   };
 }
@@ -433,7 +515,7 @@ async function handleTimeOrderedQuery({
         },
       },
     })
-    .then((polls) => polls.map(tallyPollVotes));
+    .then((polls) => polls.map(serializePoll));
 }
 
 /**
@@ -473,12 +555,10 @@ export async function getPollById(
   if (!poll) return null;
 
   if (!managementOverride) {
-    const { votes, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votes.length;
-    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
+    return { ...serializePoll(poll), votes: null };
   }
 
-  return tallyPollVotes(poll);
+  return serializePoll(poll);
 }
 
 /**
@@ -503,10 +583,8 @@ export async function getPollsFromList(
 
   return polls.map((poll) => {
     if (managementOverride) {
-      return tallyPollVotes(poll);
+      return serializePoll(poll);
     }
-    const { votes, start_time, end_time, ...restPoll } = poll;
-    const totalVotes = votes.length;
-    return { ...restPoll, time: start_time, votes: null, total_votes: totalVotes };
+    return { ...serializePoll(poll), votes: null };
   });
 }

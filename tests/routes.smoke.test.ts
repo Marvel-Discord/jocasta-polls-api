@@ -11,15 +11,10 @@ beforeAll(async () => {
 });
 
 const stubs: Array<{ method: "get" | "post"; path: string }> = [
-  { method: "get", path: "/api/v1/bot/polls/sync" },
-  { method: "get", path: "/api/v1/bot/polls/votes/123" },
   { method: "post", path: "/api/v1/bot/polls/update-by-tag" },
-  { method: "get", path: "/api/v1/bot/polls" },
   { method: "post", path: "/api/v1/bot/polls/create" },
   { method: "post", path: "/api/v1/bot/polls/update" },
   { method: "post", path: "/api/v1/bot/polls/delete" },
-  { method: "get", path: "/api/v1/bot/polls/12345" },
-  { method: "get", path: "/api/v1/bot/polls/12345/votes" },
   { method: "post", path: "/api/v1/bot/polls/12345/vote" },
   { method: "post", path: "/api/v1/bot/polls/12345/publish" },
   { method: "post", path: "/api/v1/bot/polls/12345/end" },

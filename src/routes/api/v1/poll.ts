@@ -18,6 +18,7 @@ import {
   getPollById,
   getPolls,
   getPollsFromList,
+  serializePoll,
 } from "@/services/pollService";
 import { getTags } from "@/services/tagService";
 import {
@@ -42,6 +43,12 @@ pollRouter.get("/", async (req, res) => {
       userId,
       notVoted,
       search,
+      ids,
+      num,
+      active,
+      has_start,
+      has_end,
+      active_or_persistent,
       page,
       limit,
       order,
@@ -62,6 +69,12 @@ pollRouter.get("/", async (req, res) => {
       guildId: guildId,
       published: hasManagementPerms ? published : true,
       tag,
+      ids,
+      num,
+      active,
+      has_start,
+      has_end,
+      active_or_persistent,
       user: userId
         ? {
             userId: userId,
@@ -297,6 +310,11 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
           },
           include: {
             tagRelation: true,
+            votes: {
+              select: {
+                choice: true,
+              },
+            },
           },
         });
       })
@@ -309,7 +327,7 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
     );
     res.status(201).json({
       message: "Polls created successfully",
-      polls: createdPolls,
+      polls: createdPolls.map(serializePoll),
     });
   } catch (error) {
     ApiError.sendError(res, error);
@@ -395,6 +413,11 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
           },
           include: {
             tagRelation: true,
+            votes: {
+              select: {
+                choice: true,
+              },
+            },
           },
         });
       })
@@ -406,7 +429,7 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
     );
     res.status(200).json({
       message: "Polls updated successfully",
-      polls: updatedPolls,
+      polls: updatedPolls.map(serializePoll),
     });
   } catch (error) {
     ApiError.sendError(res, error);

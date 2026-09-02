@@ -56,6 +56,19 @@ const PollFilterParamsModel = z
     orderDir: z.enum([OrderDir.Asc, OrderDir.Desc]).optional(),
     // seed for random ordering (string form will be coerced to number)
     seed: z.string().optional(),
+    // comma-separated poll ids, e.g. ids=12345,67890
+    ids: z
+      .string()
+      .refine((val) => /^(\d+)(,\d+)*$/.test(val), {
+        message: "ids must be a comma-separated list of positive integers",
+      })
+      .transform((val) => val.split(",").map(Number))
+      .optional(),
+    num: IntFilter.optional(),
+    active: BooleanFilter.optional(),
+    has_start: BooleanFilter.optional(),
+    has_end: BooleanFilter.optional(),
+    active_or_persistent: BooleanFilter.optional(),
     ...PaginationModel.shape,
   })
   .refine((data) => !(data.notVoted && !data.userId), {
@@ -103,6 +116,12 @@ export interface PollFilterParams {
   userId?: bigint;
   notVoted?: boolean;
   search?: string;
+  ids?: number[];
+  num?: number;
+  active?: boolean;
+  has_start?: boolean;
+  has_end?: boolean;
+  active_or_persistent?: boolean;
 
   page?: number;
   limit?: number;
@@ -123,6 +142,12 @@ export async function parsePollFilterParams(
     );
   }
 
+  // Cross-param validation: 'ids' and 'userId' each constrain the poll id
+  // set in incompatible ways, so combining them is rejected outright.
+  if (result.data.ids !== undefined && result.data.userId !== undefined) {
+    throw new BadRequestError("'ids' cannot be combined with 'userId'");
+  }
+
   // Additional validation for orderDir/seed depending on order
   const parsed: PollFilterParams = {
     published: result.data.published,
@@ -130,6 +155,12 @@ export async function parsePollFilterParams(
     userId: result.data.userId,
     notVoted: result.data.notVoted,
     search: result.data.search,
+    ids: result.data.ids,
+    num: result.data.num,
+    active: result.data.active,
+    has_start: result.data.has_start,
+    has_end: result.data.has_end,
+    active_or_persistent: result.data.active_or_persistent,
     page: result.data.page,
     limit: result.data.limit,
   };
@@ -139,6 +170,17 @@ export async function parsePollFilterParams(
 
     // validate orderDir/seed
     if (result.data.order === "random") {
+      if (
+        result.data.num !== undefined ||
+        result.data.active !== undefined ||
+        result.data.has_start !== undefined ||
+        result.data.has_end !== undefined ||
+        result.data.active_or_persistent !== undefined
+      ) {
+        throw new BadRequestError(
+          "'num', 'active', 'active_or_persistent', 'has_start', and 'has_end' are not supported with order=random"
+        );
+      }
       if (result.data.seed !== undefined) {
         if (!/^-?\d+$/.test(result.data.seed)) {
           throw new BadRequestError("seed must be an integer for random order");
