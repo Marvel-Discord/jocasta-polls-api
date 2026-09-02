@@ -30,10 +30,19 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1, 5]);
     response.body.data.forEach(assertContractShape);
+    // Computed active: P4/P2/P1 running, P5 ended.
+    expect(
+      response.body.data.map((poll: any) => [poll.id, poll.active]),
+    ).toEqual([
+      [4, true],
+      [2, true],
+      [1, true],
+      [5, false],
+    ]);
     expect(response.body.meta).toEqual({
-      total: 3,
+      total: 4,
       page: 1,
       limit: 10,
       totalPages: 1,
@@ -67,9 +76,10 @@ describe("bot poll reads", () => {
     expect(response.body.id).toBe(1);
     expect(response.body.votes).toEqual([2, 1]);
     expect(response.body.total_votes).toBe(3);
-    expect(response.body.start_time).toBe("2026-01-15T12:00:00.000Z");
+    expect(response.body.start_time).toBe("2024-01-15T12:00:00.000Z");
     expect(response.body.end_time).toBeNull();
     expect(response.body.guild_id).toBe(GUILD);
+    expect(response.body.active).toBe(true);
 
     const missing = await request(app)
       .get("/api/v1/bot/polls/999")
@@ -118,9 +128,19 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5]);
     response.body.data.forEach(assertContractShape);
-    expect(response.body.meta.total).toBe(4);
+    // Computed active: only the unpublished P3 and the ended P5 are inactive.
+    expect(
+      response.body.data.map((poll: any) => [poll.id, poll.active]),
+    ).toEqual([
+      [3, false],
+      [4, true],
+      [2, true],
+      [1, true],
+      [5, false],
+    ]);
+    expect(response.body.meta.total).toBe(5);
 
     const secondPage = await request(app)
       .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&page=2&limit=2`)
@@ -129,11 +149,11 @@ describe("bot poll reads", () => {
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data.map((poll: any) => poll.id)).toEqual([2, 1]);
     expect(secondPage.body.meta).toEqual({
-      total: 4,
+      total: 5,
       page: 2,
       limit: 2,
-      totalPages: 2,
-      nextPage: null,
+      totalPages: 3,
+      nextPage: 3,
       prevPage: 1,
     });
   });
@@ -165,12 +185,26 @@ describe("bot poll reads", () => {
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([2, 1]);
   });
 
-  it("active_or_persistent=true passes through to active/persistent polls", async () => {
+  it("active=true returns only the running set (no ended P5)", async () => {
     const response = await request(app)
-      .get(`/api/v1/bot/polls?guildId=${GUILD}&active_or_persistent=true`)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&active=true`)
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1]);
+  });
+
+  it("live=true includes the persistent ended P5 beyond the running set", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&live=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1, 5]);
+
+    // The difference between live and active is exactly the evergreen P5.
+    const activeIds = [4, 2, 1];
+    const liveIds = [4, 2, 1, 5];
+    expect(liveIds.filter((id) => !activeIds.includes(id))).toEqual([5]);
   });
 });

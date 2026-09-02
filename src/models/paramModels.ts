@@ -68,7 +68,7 @@ const PollFilterParamsModel = z
     active: BooleanFilter.optional(),
     has_start: BooleanFilter.optional(),
     has_end: BooleanFilter.optional(),
-    active_or_persistent: BooleanFilter.optional(),
+    live: BooleanFilter.optional(),
     ...PaginationModel.shape,
   })
   .refine((data) => !(data.notVoted && !data.userId), {
@@ -121,7 +121,7 @@ export interface PollFilterParams {
   active?: boolean;
   has_start?: boolean;
   has_end?: boolean;
-  active_or_persistent?: boolean;
+  live?: boolean;
 
   page?: number;
   limit?: number;
@@ -160,7 +160,7 @@ export async function parsePollFilterParams(
     active: result.data.active,
     has_start: result.data.has_start,
     has_end: result.data.has_end,
-    active_or_persistent: result.data.active_or_persistent,
+    live: result.data.live,
     page: result.data.page,
     limit: result.data.limit,
   };
@@ -175,10 +175,10 @@ export async function parsePollFilterParams(
         result.data.active !== undefined ||
         result.data.has_start !== undefined ||
         result.data.has_end !== undefined ||
-        result.data.active_or_persistent !== undefined
+        result.data.live !== undefined
       ) {
         throw new BadRequestError(
-          "'num', 'active', 'active_or_persistent', 'has_start', and 'has_end' are not supported with order=random"
+          "'num', 'active', 'live', 'has_start', and 'has_end' are not supported with order=random"
         );
       }
       if (result.data.seed !== undefined) {

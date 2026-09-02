@@ -24,7 +24,7 @@ interface PollFilters {
   active?: boolean;
   has_start?: boolean;
   has_end?: boolean;
-  active_or_persistent?: boolean;
+  live?: boolean;
   user?: PollFilterUser;
   search?: string;
   page?: number;
@@ -84,11 +84,30 @@ function createPaginationMeta(
 }
 
 /**
+ * Derives poll activity from timestamps: a poll is active when it is
+ * published, has started, and has not ended. Open-ended polls (NULL
+ * end_time) stay active once started. At `now === end_time` exactly the
+ * poll is inactive.
+ */
+export function computeActive(
+  poll: Pick<PollModel, "published" | "start_time" | "end_time">,
+  now: Date = new Date(),
+): boolean {
+  return (
+    poll.published &&
+    poll.start_time !== null &&
+    poll.start_time <= now &&
+    (poll.end_time === null || poll.end_time > now)
+  );
+}
+
+/**
  * Serializes a poll with its vote relation into the API contract shape:
- * tallies votes per choice, emits start_time/end_time, and keeps time as
+ * tallies votes per choice, emits start_time/end_time, derives `active`
+ * from the timestamps (the model no longer stores it), and keeps time as
  * the compatibility alias for start_time (website; removable post-migration)
  */
-export function serializePoll(poll: PollWithVotes): Poll {
+export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll {
   const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
   const totalVotes = votes.length;
   const voteCounts = new Array<number>(restPoll.choices.length).fill(0);
@@ -99,6 +118,7 @@ export function serializePoll(poll: PollWithVotes): Poll {
   }
   return {
     ...restPoll,
+    active: computeActive(poll, now),
     votes: voteCounts,
     total_votes: totalVotes,
     start_time,
@@ -155,59 +175,52 @@ function buildPollFilters(options: {
 }
 
 /**
- * Builds a Prisma where-input fragment for the bot-facing aux list filters
- * (ids, num, active, has_start, has_end, active_or_persistent). Pure — no
- * DB access — so it can be unit tested directly and composed into the list
- * path's filters object. Each filter is a pure data predicate on a single
- * column (no lifecycle coupling).
+ * Builds the derived-active where fragment: published, started, and not
+ * ended (open-ended polls count as not ended). One helper, two consumers:
+ * the `active` filter and the derived arm of the `live` filter.
  */
-export function buildPollAuxFilters(params: {
-  ids?: number[];
-  num?: number;
-  active?: boolean;
-  has_start?: boolean;
-  has_end?: boolean;
-  active_or_persistent?: boolean;
-}): Prisma.PollWhereInput {
-  const aux: Prisma.PollWhereInput = {};
-  if (params.ids?.length) aux.id = { in: params.ids };
-  if (params.num !== undefined) aux.num = params.num;
-  if (params.active !== undefined) aux.active = params.active;
-  if (params.has_start === true) aux.start_time = { not: null };
-  else if (params.has_start === false) aux.start_time = null;
-  if (params.has_end === true) aux.end_time = { not: null };
-  else if (params.has_end === false) aux.end_time = null;
-  if (params.active_or_persistent === true) {
-    aux.OR = [{ active: true }, { tagRelation: { persistent: true } }];
-  }
-  return aux;
+function derivedActiveWhere(now: Date): Prisma.PollWhereInput {
+  return {
+    published: true,
+    start_time: { lte: now },
+    OR: [{ end_time: null }, { end_time: { gt: now } }],
+  };
 }
 
 /**
- * Merges the bot-facing aux filters into the base filters (aux last, so
- * aux keys win on collision). When both sides carry a top-level OR
- * (`search` and `active_or_persistent`), each is lifted into its own AND
- * group so neither silently drops the other.
+ * Builds the bot-facing aux list filters (ids, num, active, has_start,
+ * has_end, live) as an array of conjuncts for AND-appending. Pure — no DB
+ * access — so it can be unit tested directly and composed into the list
+ * path's filters object. Each conjunct is self-contained: no fragment ever
+ * writes a top-level OR into the shared filters.
  */
-export function mergeAuxFilters(
-  base: Prisma.PollWhereInput,
-  aux: Prisma.PollWhereInput,
-): Prisma.PollWhereInput {
-  const merged = { ...base };
-  if (aux.OR && merged.OR) {
-    const baseOr = merged.OR;
-    delete merged.OR;
-    merged.AND = [
-      ...((merged.AND as Prisma.PollWhereInput[]) ?? []),
-      { OR: baseOr },
-      { OR: aux.OR },
-    ];
-    const { OR: _auxOr, ...restAux } = aux;
-    Object.assign(merged, restAux);
-  } else {
-    Object.assign(merged, aux);
+export function buildPollAuxFilters(
+  params: {
+    ids?: number[];
+    num?: number;
+    active?: boolean;
+    has_start?: boolean;
+    has_end?: boolean;
+    live?: boolean;
+  },
+  now: Date = new Date(),
+): Prisma.PollWhereInput[] {
+  const conjuncts: Prisma.PollWhereInput[] = [];
+  if (params.ids?.length) conjuncts.push({ id: { in: params.ids } });
+  if (params.num !== undefined) conjuncts.push({ num: params.num });
+  if (params.active === true) conjuncts.push(derivedActiveWhere(now));
+  else if (params.active === false)
+    conjuncts.push({ NOT: derivedActiveWhere(now) });
+  if (params.has_start === true) conjuncts.push({ start_time: { not: null } });
+  else if (params.has_start === false) conjuncts.push({ start_time: null });
+  if (params.has_end === true) conjuncts.push({ end_time: { not: null } });
+  else if (params.has_end === false) conjuncts.push({ end_time: null });
+  if (params.live === true) {
+    conjuncts.push({
+      OR: [derivedActiveWhere(now), { tagRelation: { persistent: true } }],
+    });
   }
-  return merged;
+  return conjuncts;
 }
 
 /**
@@ -255,7 +268,7 @@ export async function getPolls({
   active,
   has_start,
   has_end,
-  active_or_persistent,
+  live,
   user,
   search,
   page = 1,
@@ -266,23 +279,24 @@ export async function getPolls({
   seed,
 }: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
-  const filters = mergeAuxFilters(
-    buildPollFilters({
-      published,
-      guildId,
-      tag,
-      user,
-      searchQuery,
-    }),
-    buildPollAuxFilters({
-      ids,
-      num,
-      active,
-      has_start,
-      has_end,
-      active_or_persistent,
-    }),
-  );
+  const filters = buildPollFilters({
+    published,
+    guildId,
+    tag,
+    user,
+    searchQuery,
+  });
+  const conjuncts = buildPollAuxFilters({
+    ids,
+    num,
+    active,
+    has_start,
+    has_end,
+    live,
+  });
+  // Conjunct-array composition: aux filters are AND-appended so no
+  // fragment ever writes a top-level OR into the shared filters.
+  filters.AND = [...((filters.AND as unknown[]) ?? []), ...conjuncts];
 
   // Get total count for pagination
   const total = await prisma.poll.count({ where: filters });
@@ -408,7 +422,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  return { data: polls.map(serializePoll) };
+  return { data: polls.map((poll) => serializePoll(poll)) };
 }
 
 /**
@@ -480,7 +494,7 @@ async function handleRandomOrderedQuery({
   const orderedPolls = pollIds.map(({ id }) => pollMap.get(id)!);
 
   return {
-    data: orderedPolls.map(serializePoll),
+    data: orderedPolls.map((poll) => serializePoll(poll)),
     randomSeed,
   };
 }
@@ -515,7 +529,7 @@ async function handleTimeOrderedQuery({
         },
       },
     })
-    .then((polls) => polls.map(serializePoll));
+    .then((polls) => polls.map((poll) => serializePoll(poll)));
 }
 
 /**

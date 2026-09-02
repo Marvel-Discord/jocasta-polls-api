@@ -8,10 +8,21 @@ import {
   type PollFilterParams,
   parsePollFilterParams,
 } from "@/models/paramModels";
-import { buildPollAuxFilters, mergeAuxFilters } from "@/services/pollService";
+import { buildPollAuxFilters } from "@/services/pollService";
 import { FIXTURE_GUILD_ID } from "./fixtures";
 
 const GUILD = FIXTURE_GUILD_ID.toString();
+
+// Injected clock for the derived-active filters: keeps the builder truth
+// tables deterministic (route-level determinism comes from far-dated
+// fixture polls instead).
+const NOW = new Date("2026-06-15T12:00:00.000Z");
+
+const DERIVED_ACTIVE = {
+  published: true,
+  start_time: { lte: NOW },
+  OR: [{ end_time: null }, { end_time: { gt: NOW } }],
+};
 
 let app: Express;
 
@@ -20,94 +31,107 @@ beforeAll(async () => {
 });
 
 describe("buildPollAuxFilters", () => {
-  it("returns an empty object for empty params", () => {
-    expect(buildPollAuxFilters({})).toEqual({});
+  it("returns an empty conjunct array for empty params", () => {
+    expect(buildPollAuxFilters({}, NOW)).toEqual([]);
   });
 
-  it("maps ids to an id IN filter", () => {
-    expect(buildPollAuxFilters({ ids: [12345, 67890] })).toEqual({
-      id: { in: [12345, 67890] },
-    });
+  it("maps ids to a single id IN conjunct", () => {
+    expect(buildPollAuxFilters({ ids: [12345, 67890] }, NOW)).toEqual([
+      { id: { in: [12345, 67890] } },
+    ]);
   });
 
-  it("adds no id filter for an empty ids array", () => {
-    expect(buildPollAuxFilters({ ids: [] })).toEqual({});
+  it("adds no conjunct for an empty ids array", () => {
+    expect(buildPollAuxFilters({ ids: [] }, NOW)).toEqual([]);
   });
 
-  it("maps num to an equality filter", () => {
-    expect(buildPollAuxFilters({ num: 7 })).toEqual({ num: 7 });
+  it("maps num to a single equality conjunct", () => {
+    expect(buildPollAuxFilters({ num: 7 }, NOW)).toEqual([{ num: 7 }]);
   });
 
-  it("active=true maps to an active equality filter", () => {
-    expect(buildPollAuxFilters({ active: true })).toEqual({ active: true });
+  it("active=true derives published+started+not-ended against the injected now", () => {
+    expect(buildPollAuxFilters({ active: true }, NOW)).toEqual([
+      DERIVED_ACTIVE,
+    ]);
   });
 
-  it("active=false maps to an active equality filter", () => {
-    expect(buildPollAuxFilters({ active: false })).toEqual({ active: false });
+  it("active=false is the exact NOT complement of the derived-active object", () => {
+    expect(buildPollAuxFilters({ active: false }, NOW)).toEqual([
+      { NOT: DERIVED_ACTIVE },
+    ]);
   });
 
-  it("has_start=true maps to start_time IS NOT NULL", () => {
-    expect(buildPollAuxFilters({ has_start: true })).toEqual({
-      start_time: { not: null },
-    });
+  it("live=true ORs the derived-active object with the persistent-tag arm", () => {
+    expect(buildPollAuxFilters({ live: true }, NOW)).toEqual([
+      { OR: [DERIVED_ACTIVE, { tagRelation: { persistent: true } }] },
+    ]);
   });
 
-  it("has_start=false maps to start_time IS NULL (literal null)", () => {
-    expect(buildPollAuxFilters({ has_start: false })).toEqual({
-      start_time: null,
-    });
+  it("live=false adds no conjunct", () => {
+    expect(buildPollAuxFilters({ live: false }, NOW)).toEqual([]);
   });
 
-  it("has_end=true maps to end_time IS NOT NULL", () => {
-    expect(buildPollAuxFilters({ has_end: true })).toEqual({
-      end_time: { not: null },
-    });
+  it("has_start=true maps to a start_time IS NOT NULL conjunct", () => {
+    expect(buildPollAuxFilters({ has_start: true }, NOW)).toEqual([
+      { start_time: { not: null } },
+    ]);
   });
 
-  it("has_end=false maps to end_time IS NULL (literal null)", () => {
-    expect(buildPollAuxFilters({ has_end: false })).toEqual({
-      end_time: null,
-    });
+  it("has_start=false maps to a start_time IS NULL conjunct (literal null)", () => {
+    expect(buildPollAuxFilters({ has_start: false }, NOW)).toEqual([
+      { start_time: null },
+    ]);
   });
 
-  it("combines has_start=false with has_end=true", () => {
-    expect(buildPollAuxFilters({ has_start: false, has_end: true })).toEqual({
-      start_time: null,
-      end_time: { not: null },
-    });
+  it("has_end=true maps to an end_time IS NOT NULL conjunct", () => {
+    expect(buildPollAuxFilters({ has_end: true }, NOW)).toEqual([
+      { end_time: { not: null } },
+    ]);
   });
 
-  it("active_or_persistent=true builds the active/persistent OR fragment", () => {
-    expect(buildPollAuxFilters({ active_or_persistent: true })).toEqual({
-      OR: [{ active: true }, { tagRelation: { persistent: true } }],
-    });
+  it("has_end=false maps to an end_time IS NULL conjunct (literal null)", () => {
+    expect(buildPollAuxFilters({ has_end: false }, NOW)).toEqual([
+      { end_time: null },
+    ]);
   });
 
-  it("active_or_persistent=false adds no filter", () => {
-    expect(buildPollAuxFilters({ active_or_persistent: false })).toEqual({});
-  });
-
-  it("combines ids, num, and the boolean predicates into one fragment", () => {
+  it("combines has_start=false with has_end=true as two conjuncts", () => {
     expect(
-      buildPollAuxFilters({
-        ids: [1, 2, 3],
-        num: 42,
-        active: true,
-        has_end: true,
-        active_or_persistent: true,
-      })
-    ).toEqual({
-      id: { in: [1, 2, 3] },
-      num: 42,
-      active: true,
-      end_time: { not: null },
-      OR: [{ active: true }, { tagRelation: { persistent: true } }],
-    });
+      buildPollAuxFilters({ has_start: false, has_end: true }, NOW),
+    ).toEqual([{ start_time: null }, { end_time: { not: null } }]);
+  });
+
+  it("combines ids, num, and the boolean predicates into one conjunct per filter", () => {
+    expect(
+      buildPollAuxFilters(
+        {
+          ids: [1, 2, 3],
+          num: 42,
+          active: true,
+          has_end: true,
+          live: true,
+        },
+        NOW,
+      ),
+    ).toEqual([
+      { id: { in: [1, 2, 3] } },
+      { num: 42 },
+      DERIVED_ACTIVE,
+      { end_time: { not: null } },
+      { OR: [DERIVED_ACTIVE, { tagRelation: { persistent: true } }] },
+    ]);
+  });
+
+  it("open-ended polls stay in scope: the derived object's OR keeps the end_time null arm", () => {
+    const [conjunct] = buildPollAuxFilters({ active: true }, NOW);
+    expect(conjunct.OR).toContainEqual({ end_time: null });
+    const [liveConjunct] = buildPollAuxFilters({ live: true }, NOW);
+    expect(liveConjunct.OR?.[0]?.OR).toContainEqual({ end_time: null });
   });
 
   it("does not mutate the params object", () => {
     const params = { ids: [9], num: 1, active: false, has_end: true };
-    buildPollAuxFilters(params);
+    buildPollAuxFilters(params, NOW);
     expect(params).toEqual({ ids: [9], num: 1, active: false, has_end: true });
   });
 });
@@ -121,8 +145,8 @@ describe("parsePollFilterParams order=random conflicts", () => {
     [{ has_start: "false" }],
     [{ has_end: "true" }],
     [{ has_end: "false" }],
-    [{ active_or_persistent: "true" }],
-    [{ active_or_persistent: "false" }],
+    [{ live: "true" }],
+    [{ live: "false" }],
   ])("rejects order=random with %o", async (extra) => {
     const promise = parsePollFilterParams({
       order: "random",
@@ -131,7 +155,7 @@ describe("parsePollFilterParams order=random conflicts", () => {
 
     await expect(promise).rejects.toBeInstanceOf(BadRequestError);
     await expect(promise).rejects.toThrow(
-      "'num', 'active', 'active_or_persistent', 'has_start', and 'has_end' are not supported with order=random"
+      "'num', 'active', 'live', 'has_start', and 'has_end' are not supported with order=random"
     );
   });
 
@@ -147,7 +171,7 @@ describe("parsePollFilterParams order=random conflicts", () => {
     expect(parsed.active).toBeUndefined();
     expect(parsed.has_start).toBeUndefined();
     expect(parsed.has_end).toBeUndefined();
-    expect(parsed.active_or_persistent).toBeUndefined();
+    expect(parsed.live).toBeUndefined();
   });
 });
 
@@ -183,76 +207,26 @@ describe("parsePollFilterParams ids/userId conflicts", () => {
   });
 });
 
-describe("mergeAuxFilters", () => {
-  it("plain-merges when neither side has an OR", () => {
-    expect(
-      mergeAuxFilters({ published: true, guild_id: 123n }, { num: 7 }),
-    ).toEqual({
-      published: true,
-      guild_id: 123n,
-      num: 7,
-    });
-  });
-
-  it("preserves a base-only OR", () => {
-    const baseOr = [{ question: { contains: "comic" } }];
-
-    expect(mergeAuxFilters({ OR: baseOr }, { num: 7 })).toEqual({
-      OR: baseOr,
-      num: 7,
-    });
-  });
-
-  it("preserves an aux-only OR", () => {
-    const auxOr = [{ active: true }, { tagRelation: { persistent: true } }];
-
-    expect(mergeAuxFilters({ published: true }, { OR: auxOr })).toEqual({
-      published: true,
-      OR: auxOr,
-    });
-  });
-
-  it("lifts colliding ORs into AND groups with both preserved", () => {
-    const baseOr = [{ question: { contains: "comic" } }];
-    const auxOr = [{ active: true }, { tagRelation: { persistent: true } }];
-
-    const merged = mergeAuxFilters(
-      { published: true, OR: baseOr },
-      { num: 3, OR: auxOr },
-    );
-
-    expect(merged).toEqual({
-      published: true,
-      num: 3,
-      AND: [{ OR: baseOr }, { OR: auxOr }],
-    });
-    expect(merged.OR).toBeUndefined();
-  });
-
-  it("keeps existing base AND entries when lifting colliding ORs", () => {
-    const baseOr = [{ question: { contains: "comic" } }];
-    const auxOr = [{ active: true }];
-
-    const merged = mergeAuxFilters(
-      { AND: [{ num: 1 }], OR: baseOr },
-      { OR: auxOr },
-    );
-
-    expect(merged.AND).toEqual([{ num: 1 }, { OR: baseOr }, { OR: auxOr }]);
-  });
-
-  it("aux non-OR keys still win over the base keys", () => {
-    expect(
-      mergeAuxFilters({ published: true }, { published: false, num: 42 }),
-    ).toEqual({ published: false, num: 42 });
-  });
-});
-
 describe("GET /api/v1/polls unpublished gate", () => {
   it("returns 403 for published=false without an OAuth session", async () => {
     const response = await request(app).get(
       `/api/v1/polls?guildId=${GUILD}&published=false`,
     );
     expect(response.status).toBe(403);
+  });
+
+  it("unauthenticated active=false derives only published inactive polls (forced published:true composes via AND)", async () => {
+    const response = await request(app).get(
+      `/api/v1/polls?guildId=${GUILD}&active=false`,
+    );
+
+    expect(response.status).toBe(200);
+    // P5 (published, ended) is the only published inactive poll; the
+    // unpublished P3 also fails the derived-active conjunct but the
+    // route's forced published:true must exclude it.
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([5]);
+    expect(
+      response.body.data.every((poll: any) => poll.published === true),
+    ).toBe(true);
   });
 });

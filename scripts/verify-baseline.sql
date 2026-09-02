@@ -78,10 +78,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'c' AND conname = 'polls_published_requires_start') THEN
     problems := array_append(problems, 'polls_published_requires_start CHECK missing');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.votes'::regclass AND contype = 'f' AND conname = 'votes_poll_id_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.votes'::regclass AND contype = 'f' AND conname = 'votes_poll_id_fkey' AND confdeltype = 'c') THEN
     problems := array_append(problems, 'votes_poll_id_fkey FK missing');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'f' AND conname = 'polls_tag_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'f' AND conname = 'polls_tag_fkey' AND confdeltype = 'r') THEN
     problems := array_append(problems, 'polls_tag_fkey FK missing');
   END IF;
 
