@@ -4,6 +4,7 @@ import express from "express";
 import { apiRouter } from "@/routes";
 import config from "@/config";
 import { initializeAuth } from "@/auth/passport";
+import { errorHandler } from "@/middleware/errorHandler";
 
 export async function createApp() {
   const app = express();
@@ -53,6 +54,8 @@ export async function createApp() {
   await initializeAuth(app);
 
   app.use(apiRouter);
+
+  app.use(errorHandler);
 
   return app;
 }

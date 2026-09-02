@@ -1,4 +1,5 @@
 import { prisma } from "@/client";
+import { ForbiddenError, NotFoundError } from "@/errors";
 import type { Vote } from "@/types";
 
 export async function getVote(
@@ -27,11 +28,11 @@ export async function getVotesByPoll(
   });
 
   if (!poll) {
-    throw new Error("Poll not found");
+    throw new NotFoundError("Poll not found");
   }
 
   if (!poll.show_voting && !managementOverride) {
-    throw new Error("Votes are not visible for this poll");
+    throw new ForbiddenError("Votes are not visible for this poll");
   }
 
   const votes = await prisma.vote.groupBy({

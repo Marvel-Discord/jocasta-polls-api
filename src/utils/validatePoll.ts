@@ -1,12 +1,13 @@
+import { BadRequestError } from "@/errors";
 import { Poll } from "@/types";
 
 export function validatePoll(poll: Poll) {
   if (!poll) {
-    throw new Error("Poll cannot be null or undefined");
+    throw new BadRequestError("Poll cannot be null or undefined");
   }
 
   if (typeof poll.question !== "string" || poll.question.trim() === "") {
-    throw new Error("Poll question must be a non-empty string");
+    throw new BadRequestError("Poll question must be a non-empty string");
   }
 
   if (
@@ -14,7 +15,7 @@ export function validatePoll(poll: Poll) {
     poll.choices.length < 1 ||
     poll.choices.length > 8
   ) {
-    throw new Error("Poll choices must be an array with 1 to 8 items");
+    throw new BadRequestError("Poll choices must be an array with 1 to 8 items");
   }
 
   if (
@@ -22,25 +23,25 @@ export function validatePoll(poll: Poll) {
       (choice) => typeof choice !== "string" || choice.trim() === ""
     )
   ) {
-    throw new Error("All poll choices must be non-empty strings");
+    throw new BadRequestError("All poll choices must be non-empty strings");
   }
 
   if (poll.guild_id === undefined || typeof poll.guild_id !== "bigint") {
-    throw new Error("Poll guild_id must be a valid bigint");
+    throw new BadRequestError("Poll guild_id must be a valid bigint");
   }
 
   if (
     poll.tag !== undefined &&
     (typeof poll.tag !== "number" || poll.tag < 0)
   ) {
-    throw new Error("Poll tag must be a non-negative number");
+    throw new BadRequestError("Poll tag must be a non-negative number");
   }
 }
 
 export function validatePublishedPoll(newPoll: Poll, existingPoll: Poll) {
   if (existingPoll.published) {
     if (newPoll.choices.length !== existingPoll.choices.length) {
-      throw new Error(
+      throw new BadRequestError(
         "Cannot change the number of choices for a published poll"
       );
     }
@@ -57,7 +58,7 @@ export function validatePublishedPoll(newPoll: Poll, existingPoll: Poll) {
       : null;
 
     if (newTime?.getTime() !== existingTime?.getTime()) {
-      throw new Error("Cannot change the time of a published poll");
+      throw new BadRequestError("Cannot change the time of a published poll");
     }
   }
 }
