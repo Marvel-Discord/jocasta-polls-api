@@ -11,7 +11,6 @@ model Poll {
   id                    Int       @id
   question              String
   published             Boolean   @default(false)
-  active                Boolean   @default(false)
   guild_id              BigInt
   choices               String[]
   start_time            DateTime? @db.Timestamptz
@@ -19,7 +18,7 @@ model Poll {
   num                   Int?
   message_id            BigInt?
   crosspost_message_ids BigInt[]
-  tag                   Int?
+  tag                   Int
   image                 String?
   description           String?
   thread_question       String?
@@ -29,7 +28,7 @@ model Poll {
   fallback              Boolean   @default(false)
 
   votes       Vote[] @relation
-  tagRelation Tag?   @relation(fields: [tag], references: [tag])
+  tagRelation Tag    @relation(fields: [tag], references: [tag], onDelete: Restrict)
 
   @@map("polls")
 }
@@ -73,7 +72,7 @@ model Vote {
   poll_id Int
   choice  Int
 
-  poll Poll @relation(fields: [poll_id], references: [id])
+  poll Poll @relation(fields: [poll_id], references: [id], onDelete: Cascade)
 
   @@map("votes")
 }
