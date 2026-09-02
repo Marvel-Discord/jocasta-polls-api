@@ -22,6 +22,21 @@ vi.mock("@/utils/checkDiscordMembership", () => ({
   attachManagementPermsFlag: async () => true,
 }));
 
+// The bot write shims revalidate the acting user's manager role via
+// Discord on every request; stub the member lookup as manager so the
+// shims exercise their handlers (the gate itself has its own test
+// file). The factory dynamic-imports fixtures for the same hoisting
+// reason as tests/setup.ts.
+vi.mock("@/services/discordService", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/services/discordService")>();
+  const { FIXTURE_MANAGER_ROLE_ID } = await import("./fixtures");
+  return {
+    ...actual,
+    getGuildMemberRoles: async () => [FIXTURE_MANAGER_ROLE_ID],
+  };
+});
+
 import { createApp } from "@/app";
 import { ApiError, BadRequestError, NotFoundError } from "@/errors";
 import { errorHandler } from "@/middleware/errorHandler";
@@ -455,6 +470,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/create")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send([
         {
           question: "bot created",
@@ -476,6 +492,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/create")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send({ nope: true });
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("pollsData must be a non-empty array");
@@ -485,6 +502,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/update")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send([
         updateInput(3, {
           question: "bot edited",
@@ -502,6 +520,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/update")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send([updateInput(1, { tag: 2, guild_id: GUILD })]);
     expect(response.status).toBe(400);
     expect(response.body.message).toBe(
@@ -513,6 +532,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/delete")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send({ pollIds: [3] });
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -525,6 +545,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/delete")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send({ pollIds: [1] });
     expect(response.status).toBe(403);
     expect(response.body.message).toBe("Cannot delete published polls");
@@ -534,6 +555,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/update-by-tag")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send({ tag: 2, question: "renamed" });
     expect(response.status).toBe(200);
     expect(response.body.message).toBe("Polls updated successfully");
@@ -549,6 +571,7 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     const response = await request(botApp)
       .post("/api/v1/bot/polls/update-by-tag")
       .set("Authorization", `Bearer ${TOKEN}`)
+      .set("X-Discord-User-Id", USER)
       .send({ tag: 2, question: "renamed", num: 5 });
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Unknown fields: num");

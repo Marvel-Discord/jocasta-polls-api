@@ -9,6 +9,7 @@ import {
   NotFoundError,
   NotImplementedError,
 } from "@/errors";
+import { requireDiscordRevalidation } from "@/middleware/requireDiscordRevalidation";
 import {
   type GuildIdParams,
   type PollFilterParams,
@@ -115,14 +116,18 @@ botPollRouter.get("/votes/:userId", async (req, res) => {
   res.status(200).json(votes);
 });
 
-botPollRouter.post("/update-by-tag", async (req, res) => {
-  const { tag, ...fields } = parseUpdateByTagBody(req.body);
-  const updatedPolls = await updatePollsByTag(tag, fields);
-  res.status(200).json({
-    message: "Polls updated successfully",
-    polls: updatedPolls.map((poll) => serializePoll(poll)),
-  });
-});
+botPollRouter.post(
+  "/update-by-tag",
+  requireDiscordRevalidation,
+  async (req, res) => {
+    const { tag, ...fields } = parseUpdateByTagBody(req.body);
+    const updatedPolls = await updatePollsByTag(tag, fields);
+    res.status(200).json({
+      message: "Polls updated successfully",
+      polls: updatedPolls.map((poll) => serializePoll(poll)),
+    });
+  },
+);
 
 botPollRouter.get("/", async (req, res) => {
   const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
@@ -138,21 +143,21 @@ botPollRouter.get("/", async (req, res) => {
   res.status(200).json({ data, meta });
 });
 
-botPollRouter.post("/create", async (req, res) => {
+botPollRouter.post("/create", requireDiscordRevalidation, async (req, res) => {
   const createdPolls = await createPolls(req.body);
   res.status(201).json({
     message: "Polls created successfully",
     polls: createdPolls.map((poll) => serializePoll(poll)),
   });
 });
-botPollRouter.post("/update", async (req, res) => {
+botPollRouter.post("/update", requireDiscordRevalidation, async (req, res) => {
   const updatedPolls = await updatePolls(req.body);
   res.status(200).json({
     message: "Polls updated successfully",
     polls: updatedPolls.map((poll) => serializePoll(poll)),
   });
 });
-botPollRouter.post("/delete", async (req, res) => {
+botPollRouter.post("/delete", requireDiscordRevalidation, async (req, res) => {
   const deletedPolls = await deletePolls(req.body?.pollIds);
   res.status(200).json({
     message: "Polls deleted successfully",

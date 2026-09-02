@@ -21,6 +21,9 @@
 
 export const FIXTURE_GUILD_ID = 281648235557421056n;
 export const FIXTURE_USER_ID = 111111111111111111n;
+// The sole role allowed to manage polls per the fixture guild settings;
+// the revalidation gate tests intersect mocked member roles against it.
+export const FIXTURE_MANAGER_ROLE_ID = 444444444444444444n;
 export const FIXTURE_OTHER_USER_ID = 222222222222222222n;
 export const FIXTURE_THIRD_USER_ID = 333333333333333333n;
 
@@ -251,7 +254,7 @@ export const FIXTURE_GUILD_SETTINGS: FixtureGuildSettings[] = [
     guild_id: FIXTURE_GUILD_ID,
     default_channel_id: 101n,
     manage_channel_id: [],
-    manager_role_id: [],
+    manager_role_id: [FIXTURE_MANAGER_ROLE_ID],
     default_colour: null,
     fallback_channel_id: null,
   },
