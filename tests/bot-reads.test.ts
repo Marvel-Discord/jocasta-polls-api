@@ -156,6 +156,15 @@ describe("bot poll reads", () => {
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([4]);
   });
 
+  it("filters polls without an end time (null-literal matcher)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&has_end=false`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([2, 1]);
+  });
+
   it("active_or_persistent=true passes through to active/persistent polls", async () => {
     const response = await request(app)
       .get(`/api/v1/bot/polls?guildId=${GUILD}&active_or_persistent=true`)
