@@ -265,6 +265,10 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
     normalizedPollsData.forEach((poll) => {
       validatePoll(poll);
 
+      if (poll.tag === undefined) {
+        throw new BadRequestError("Poll tag is required");
+      }
+
       if (poll.guild_id !== config.guildId) {
         throw new ApiError("Cannot create polls for other guilds", 403);
       }

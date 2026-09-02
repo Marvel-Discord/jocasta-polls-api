@@ -14,11 +14,19 @@ beforeAll(async () => {
 });
 
 function assertContractShape(poll: any) {
-  for (const field of ["start_time", "end_time", "time", "votes", "total_votes"]) {
+  for (const field of [
+    "start_time",
+    "end_time",
+    "time",
+    "votes",
+    "total_votes",
+    "active",
+  ]) {
     expect(poll).toHaveProperty(field);
   }
   expect(Array.isArray(poll.votes)).toBe(true);
   expect(typeof poll.total_votes).toBe("number");
+  expect(typeof poll.active).toBe("boolean");
   expect(poll.time).toBe(poll.start_time);
   expect(poll).not.toHaveProperty("tagRelation");
 }
@@ -212,5 +220,17 @@ describe("bot poll reads", () => {
     // proven from the responses: live contains all of active plus P5 only.
     expect(liveIds).toEqual(expect.arrayContaining(activeIds));
     expect(liveIds.filter((id: number) => !activeIds.includes(id))).toEqual([5]);
+  });
+
+  it("search composes with live=true: only the intersection (route-level OR + conjunct)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&search=P1&live=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    // search=P1 matches only P1 among published polls; live=true alone
+    // yields [4, 2, 1, 5], so the composed result is exactly [1].
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([1]);
+    expect(response.body.meta.total).toBe(1);
   });
 });

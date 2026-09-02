@@ -278,6 +278,7 @@ export async function getPolls({
   orderDir,
   seed,
 }: PollFilters): Promise<{ data: Poll[]; meta: Meta }> {
+  const now = new Date();
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
   const filters = buildPollFilters({
     published,
@@ -286,14 +287,17 @@ export async function getPolls({
     user,
     searchQuery,
   });
-  const conjuncts = buildPollAuxFilters({
-    ids,
-    num,
-    active,
-    has_start,
-    has_end,
-    live,
-  });
+  const conjuncts = buildPollAuxFilters(
+    {
+      ids,
+      num,
+      active,
+      has_start,
+      has_end,
+      live,
+    },
+    now,
+  );
   // Conjunct-array composition: aux filters are AND-appended so no
   // fragment ever writes a top-level OR into the shared filters.
   filters.AND = [...((filters.AND as unknown[]) ?? []), ...conjuncts];
@@ -316,7 +320,9 @@ export async function getPolls({
       published,
       tag,
       searchQuery,
+      ids,
       seed,
+      now,
     });
 
     data = result.data;
@@ -328,6 +334,7 @@ export async function getPolls({
       page,
       limit,
       orderDir,
+      now,
     });
   }
 
@@ -351,7 +358,9 @@ async function handleSpecialOrderingQueries({
   published,
   tag,
   searchQuery,
+  ids,
   seed,
+  now,
 }: {
   filters: any;
   user?: PollFilterUser;
@@ -363,7 +372,9 @@ async function handleSpecialOrderingQueries({
   published?: boolean;
   tag?: number;
   searchQuery?: string;
+  ids?: number[];
   seed?: number;
+  now: Date;
 }): Promise<{ data: Poll[]; randomSeed?: number }> {
   const offset = (page - 1) * limit;
 
@@ -377,17 +388,25 @@ async function handleSpecialOrderingQueries({
   }
 
   if (order === OrderType.Votes) {
-    return await handleVoteOrderedQuery({ filters, limit, offset, orderDir });
+    return await handleVoteOrderedQuery({
+      filters,
+      limit,
+      offset,
+      orderDir,
+      now,
+    });
   } else {
     return await handleRandomOrderedQuery({
       guildId,
       published,
       tag,
       searchQuery,
+      ids,
       filters,
       limit,
       offset,
       seed,
+      now,
     });
   }
 }
@@ -400,11 +419,13 @@ async function handleVoteOrderedQuery({
   limit,
   offset,
   orderDir,
+  now,
 }: {
   filters: any;
   limit: number;
   offset: number;
   orderDir?: OrderDir;
+  now: Date;
 }): Promise<{ data: Poll[] }> {
   const polls = await prisma.poll.findMany({
     where: filters,
@@ -422,7 +443,7 @@ async function handleVoteOrderedQuery({
     },
   });
 
-  return { data: polls.map((poll) => serializePoll(poll)) };
+  return { data: polls.map((poll) => serializePoll(poll, now)) };
 }
 
 /**
@@ -433,19 +454,23 @@ async function handleRandomOrderedQuery({
   published,
   tag,
   searchQuery,
+  ids,
   filters,
   limit,
   offset,
   seed,
+  now,
 }: {
   guildId: bigint;
   published?: boolean;
   tag?: number;
   searchQuery?: string;
+  ids?: number[];
   filters: any;
   limit: number;
   offset: number;
   seed?: number;
+  now: Date;
 }): Promise<{ data: Poll[]; randomSeed: number }> {
   const randomSeed =
     typeof seed === "number"
@@ -461,6 +486,11 @@ async function handleRandomOrderedQuery({
       ${
         searchQuery
           ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}))`
+          : Prisma.empty
+      }
+      ${
+        ids?.length
+          ? Prisma.sql`AND id = ANY(${ids})`
           : Prisma.empty
       }
       ${
@@ -494,7 +524,7 @@ async function handleRandomOrderedQuery({
   const orderedPolls = pollIds.map(({ id }) => pollMap.get(id)!);
 
   return {
-    data: orderedPolls.map((poll) => serializePoll(poll)),
+    data: orderedPolls.map((poll) => serializePoll(poll, now)),
     randomSeed,
   };
 }
@@ -507,11 +537,13 @@ async function handleTimeOrderedQuery({
   page,
   limit,
   orderDir,
+  now,
 }: {
   filters: any;
   page: number;
   limit: number;
   orderDir?: OrderDir;
+  now: Date;
 }): Promise<Poll[]> {
   const orderBy = { start_time: getOrderDirection(orderDir) };
 
@@ -529,7 +561,7 @@ async function handleTimeOrderedQuery({
         },
       },
     })
-    .then((polls) => polls.map((poll) => serializePoll(poll)));
+    .then((polls) => polls.map((poll) => serializePoll(poll, now)));
 }
 
 /**
