@@ -22,6 +22,7 @@ import {
 } from "@/services/pollService";
 import { getTags } from "@/services/tagService";
 import {
+  castVote,
   getVote,
   getVotesByPoll,
   getVotesByUser,
@@ -149,65 +150,13 @@ pollRouter.post("/:pollId/vote", requireAuth, async (req, res) => {
   const userId = await parseUserId(req.body as UserIdParams);
   const choice = await parseChoice(req.body as VoteParams);
 
-  const poll = await getPollById(pollId, false);
-  if (!poll) {
-    throw new NotFoundError(`Poll with id ${pollId} not found`);
-  }
+  const { deleted } = await castVote(pollId, userId, choice);
 
-  // Check if user already has a vote for this poll
-  const existingVote = await prisma.vote.findFirst({
-    where: {
-      user_id: BigInt(userId),
-      poll_id: pollId,
-    },
-  });
-
-  // If choice is null/undefined, delete the vote
   if (choice === null || choice === undefined) {
-    if (existingVote) {
-      await prisma.vote.deleteMany({
-        where: {
-          user_id: BigInt(userId),
-          poll_id: pollId,
-        },
-      });
-      res.status(200).json({ message: "Vote deleted successfully" });
-    } else {
-      res.status(200).json({ message: "No vote to delete" });
-    }
+    res.status(200).json({
+      message: deleted ? "Vote deleted successfully" : "No vote to delete",
+    });
     return;
-  }
-
-  // Validate choice for non-null votes
-  if (choice >= poll.choices.length) {
-    throw new BadRequestError(`${choice} is not a valid choice`);
-  }
-
-  if (existingVote) {
-    // Update existing vote
-    await prisma.vote.update({
-      where: { id: existingVote.id },
-      data: { choice: choice },
-    });
-    console.log(
-      `Updated vote for user ${userId} in poll ${pollId} to choice ${choice}`
-    );
-  } else {
-    // Generate unique vote ID by summing user_id and poll_id
-    const voteId = BigInt(userId) + BigInt(pollId);
-
-    // Create new vote
-    await prisma.vote.create({
-      data: {
-        id: voteId,
-        user_id: BigInt(userId),
-        poll_id: pollId,
-        choice: choice,
-      },
-    });
-    console.log(
-      `Created new vote for user ${userId} in poll ${pollId} for choice ${choice}`
-    );
   }
 
   res.status(200).json({ message: "Vote cast successfully" });

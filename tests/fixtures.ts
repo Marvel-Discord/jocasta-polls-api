@@ -2,8 +2,9 @@
  * Fixture-backed prisma mock for route tests.
  *
  * Exports hand-tunable fixture data plus `createFixturePrisma()`, whose
- * delegates implement exactly the query shapes the read services really
- * issue (pollService / voteService / tagService / guildService).
+ * delegates implement exactly the query shapes the services really
+ * issue (pollService / voteService reads + voteService.castVote writes /
+ * tagService / guildService).
  *
  * Design notes:
  * - Votes live flat in FIXTURE_VOTES; the poll delegates join them onto
@@ -268,6 +269,7 @@ type MockArgs = {
   skip?: number;
   by?: unknown;
   _count?: unknown;
+  data?: unknown;
 };
 
 function unsupported(what: string, value: unknown): never {
@@ -572,6 +574,68 @@ async function voteFindMany(args: MockArgs = {}): Promise<Row[]> {
   );
 }
 
+async function voteCreate(args: MockArgs): Promise<Row> {
+  const data = args.data;
+  if (
+    !isRecord(data) ||
+    !hasExactKeys(data, ["id", "user_id", "poll_id", "choice"]) ||
+    typeof data.id !== "bigint" ||
+    typeof data.user_id !== "bigint" ||
+    typeof data.poll_id !== "number" ||
+    typeof data.choice !== "number"
+  ) {
+    return unsupported("vote.create data", data);
+  }
+  if (FIXTURE_VOTES.some((vote) => vote.id === data.id)) {
+    // Real prisma enforces the PK; mirror it so id-scheme collisions
+    // fail loudly instead of silently double-counting.
+    throw new Error(
+      `fixture prisma mock: vote.create duplicate id ${data.id} (PK)`,
+    );
+  }
+  const row: FixtureVote = {
+    id: data.id,
+    user_id: data.user_id,
+    poll_id: data.poll_id,
+    choice: data.choice,
+  };
+  FIXTURE_VOTES.push(row);
+  return { ...row };
+}
+
+async function voteUpdate(args: MockArgs): Promise<Row> {
+  const where = args.where;
+  const data = args.data;
+  const id =
+    isRecord(where) && hasExactKeys(where, ["id"]) ? where.id : undefined;
+  if (
+    id === undefined ||
+    !isRecord(data) ||
+    !hasExactKeys(data, ["choice"]) ||
+    typeof data.choice !== "number"
+  ) {
+    return unsupported("vote.update args", { where, data });
+  }
+  const vote = FIXTURE_VOTES.find((vote) => vote.id === id);
+  if (vote === undefined) {
+    throw new Error(`fixture prisma mock: vote.update unknown id ${id}`);
+  }
+  vote.choice = data.choice;
+  return { ...vote };
+}
+
+async function voteDeleteMany(args: MockArgs): Promise<{ count: number }> {
+  const where = args.where;
+  if (!isRecord(where) || !hasExactKeys(where, ["user_id", "poll_id"])) {
+    return unsupported("vote.deleteMany where", where);
+  }
+  const doomed = FIXTURE_VOTES.filter((vote) => matchVote(vote, where));
+  for (const vote of doomed) {
+    FIXTURE_VOTES.splice(FIXTURE_VOTES.indexOf(vote), 1);
+  }
+  return { count: doomed.length };
+}
+
 async function tagFindMany(args: MockArgs = {}): Promise<Row[]> {
   const include = args.include;
   if (include === undefined) {
@@ -630,9 +694,11 @@ async function guildSettingsFindUnique(args: MockArgs): Promise<Row | null> {
 }
 
 /**
- * Builds the fixture-backed prisma delegate set. Read-only: the mock does
- * not implement write paths or `$queryRaw` (order=random), so those fail
- * loudly if a test reaches them.
+ * Builds the fixture-backed prisma delegate set. Reads plus the vote
+ * write paths the services issue (create/update/deleteMany); everything
+ * else — other writes, `$queryRaw` (order=random) — fails loudly if a
+ * test reaches it. Write delegates mutate FIXTURE_VOTES in place, so
+ * tests that write should restore it (see castVote.test.ts).
  */
 export function createFixturePrisma() {
   return {
@@ -647,6 +713,9 @@ export function createFixturePrisma() {
       groupBy: voteGroupBy,
       findFirst: voteFindFirst,
       findMany: voteFindMany,
+      create: voteCreate,
+      update: voteUpdate,
+      deleteMany: voteDeleteMany,
     },
     tag: {
       findMany: tagFindMany,

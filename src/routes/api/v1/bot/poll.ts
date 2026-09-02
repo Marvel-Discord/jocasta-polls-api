@@ -4,6 +4,7 @@ import type { Response } from "express";
 import { getBotContext } from "@/context/botContext";
 import {
   ApiError,
+  BadRequestError,
   NotFoundError,
   NotImplementedError,
 } from "@/errors";
@@ -12,13 +13,15 @@ import {
   type PollFilterParams,
   type PollIdParams,
   type UserIdParams,
+  type VoteParams,
+  parseChoice,
   parseGuildId,
   parsePollFilterParams,
   parsePollId,
   parseUserId,
 } from "@/models/paramModels";
 import { getPollById, getPolls } from "@/services/pollService";
-import { getVotesByPoll, getVotesByUser } from "@/services/voteService";
+import { castVote, getVotesByPoll, getVotesByUser } from "@/services/voteService";
 
 export const botPollRouter = Router();
 
@@ -103,7 +106,22 @@ botPollRouter.get("/:pollId/votes", async (req, res) => {
   res.status(200).json(votes);
 });
 
-botPollRouter.post("/:pollId/vote", (_req, res) => notImplemented(res));
+botPollRouter.post("/:pollId/vote", async (req, res) => {
+  const pollId = await parsePollId(req.params as PollIdParams);
+  const rawUserId = getBotContext()?.userId;
+  if (rawUserId === undefined) {
+    throw new BadRequestError(
+      "X-Discord-User-Id header is required for voting",
+    );
+  }
+  const choice = await parseChoice(req.body as VoteParams);
+  const { votes, total_votes } = await castVote(
+    pollId,
+    BigInt(rawUserId),
+    choice,
+  );
+  res.status(200).json({ votes, total_votes });
+});
 botPollRouter.post("/:pollId/publish", (_req, res) => notImplemented(res));
 botPollRouter.post("/:pollId/end", (_req, res) => notImplemented(res));
 botPollRouter.post("/:pollId/crosspost", (_req, res) => notImplemented(res));
