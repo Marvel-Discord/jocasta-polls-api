@@ -140,6 +140,22 @@ describe("updatePolls field matrix", () => {
     expect(pollById(1).start_time).toEqual(new Date(P1_START));
   });
 
+  it("published: time null counts as a change (400)", async () => {
+    const cleared = updatePolls([updateInput(1, { time: null })]);
+    await expect(cleared).rejects.toBeInstanceOf(BadRequestError);
+    await expect(cleared).rejects.toThrow(
+      "Cannot change the time of a published poll",
+    );
+    expect(pollById(1).start_time).toEqual(new Date(P1_START));
+  });
+
+  it("published: start_time null no-ops and keeps existing", async () => {
+    // deliberate asymmetry: null via the alias is a change, null via
+    // start_time resolves to undefined (keep)
+    await updatePolls([updateInput(1, { start_time: null })]);
+    expect(pollById(1).start_time).toEqual(new Date(P1_START));
+  });
+
   it("unpublished: start_time change allowed and persisted", async () => {
     await updatePolls([updateInput(3, { start_time: NEW_TIME })]);
     expect(pollById(3).start_time).toEqual(new Date(NEW_TIME));
@@ -158,6 +174,15 @@ describe("updatePolls field matrix", () => {
     // P4 ships with an end_time; shortening a running poll is allowed
     await updatePolls([updateInput(4, { end_time: NEW_TIME })]);
     expect(pollById(4).end_time).toEqual(new Date(NEW_TIME));
+  });
+
+  it("unpublished: end_time null clears it (stays null, not epoch-0)", async () => {
+    await updatePolls([updateInput(3, { end_time: NEW_END })]);
+    expect(pollById(3).end_time).toEqual(new Date(NEW_END));
+
+    const [updated] = await updatePolls([updateInput(3, { end_time: null })]);
+    expect(updated.end_time).toBeNull();
+    expect(pollById(3).end_time).toBeNull();
   });
 });
 
@@ -185,6 +210,23 @@ describe("time alias rule", () => {
     ]);
     expect(created.start_time).toEqual(new Date(NEW_TIME));
     expect(pollById(created.id).start_time).toEqual(new Date(NEW_TIME));
+  });
+
+  it("create: time and start_time with different instants -> 400", async () => {
+    const conflict = createPolls([
+      {
+        question: "alias conflict",
+        choices: ["a", "b"],
+        guild_id: FIXTURE_GUILD_ID,
+        tag: 1,
+        time: NEW_TIME,
+        start_time: P1_START,
+      },
+    ]);
+    await expect(conflict).rejects.toBeInstanceOf(BadRequestError);
+    await expect(conflict).rejects.toThrow(
+      "'time' and 'start_time' conflict; provide one",
+    );
   });
 });
 
