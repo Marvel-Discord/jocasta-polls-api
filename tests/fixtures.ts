@@ -42,7 +42,7 @@ export type FixturePoll = {
   num: number | null;
   message_id: bigint | null;
   crosspost_message_ids: bigint[];
-  tag: number | null;
+  tag: number;
   image: string | null;
   description: string | null;
   thread_question: string | null;
@@ -88,9 +88,10 @@ export type FixtureGuildSettings = {
 
 // P1: published, visible voting, persistent tag 1, votes 2 -> choice 0, 1 -> choice 1.
 //     Started, open-ended (end null) -> derives active.
-// P2: published, hidden voting (show_voting false), 2 votes, tagless.
+// P2: published, hidden voting (show_voting false), 2 votes, persistent tag 1
+//     (matches both live-filter OR arms: derived-active AND persistent).
 //     Started, open-ended -> derives active.
-// P3: unpublished, tagless, scheduled (future start_time, end null), no votes -> inactive.
+// P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
 // P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
 // P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
 // FIXTURE_USER_ID votes on P1 + P2 only, so published/notVoted leaves P4.
@@ -126,7 +127,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     num: 2,
     message_id: 1002n,
     crosspost_message_ids: [],
-    tag: null,
+    tag: 1,
     image: null,
     description: "P2 description",
     thread_question: null,
@@ -146,7 +147,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     num: null,
     message_id: null,
     crosspost_message_ids: [],
-    tag: null,
+    tag: 2,
     image: null,
     description: null,
     thread_question: null,
@@ -353,10 +354,7 @@ function matchVotesRelation(votes: FixtureVote[], cond: unknown): boolean {
 function matchTagRelation(poll: FixturePoll, cond: unknown): boolean {
   const persistent = isRecord(cond) ? cond.persistent : undefined;
   if (persistent !== true) return unsupported("poll where tagRelation", cond);
-  const tagRow =
-    poll.tag === null
-      ? undefined
-      : FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
+  const tagRow = FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
   return tagRow !== undefined && tagRow.persistent;
 }
 
@@ -379,6 +377,11 @@ function matchChoicesHas(choices: string[], cond: unknown): boolean {
 }
 
 function matchPoll(poll: FixturePoll, where: unknown): boolean {
+  // Runtime enforcement of the post-2_finalize_schema invariant: `tag` is
+  // NOT NULL in production, so a null-tag fixture row is an unsupported
+  // shape even though the FixturePoll type already forbids it.
+  const tag: number | null = poll.tag;
+  if (tag === null) return unsupported("poll tag (NOT NULL)", tag);
   if (where === undefined) return true;
   if (!isRecord(where)) return unsupported("poll where", where);
   for (const [key, cond] of Object.entries(where)) {

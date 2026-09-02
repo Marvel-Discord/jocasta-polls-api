@@ -195,16 +195,22 @@ describe("bot poll reads", () => {
   });
 
   it("live=true includes the persistent ended P5 beyond the running set", async () => {
-    const response = await request(app)
+    const liveResponse = await request(app)
       .get(`/api/v1/bot/polls?guildId=${GUILD}&live=true`)
       .set("Authorization", `Bearer ${TOKEN}`);
+    const activeResponse = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&active=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
 
-    expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1, 5]);
+    expect(liveResponse.status).toBe(200);
+    expect(activeResponse.status).toBe(200);
+    const liveIds = liveResponse.body.data.map((poll: any) => poll.id);
+    const activeIds = activeResponse.body.data.map((poll: any) => poll.id);
+    expect(liveIds).toEqual([4, 2, 1, 5]);
 
-    // The difference between live and active is exactly the evergreen P5.
-    const activeIds = [4, 2, 1];
-    const liveIds = [4, 2, 1, 5];
-    expect(liveIds.filter((id) => !activeIds.includes(id))).toEqual([5]);
+    // The difference between live and active is exactly the evergreen P5,
+    // proven from the responses: live contains all of active plus P5 only.
+    expect(liveIds).toEqual(expect.arrayContaining(activeIds));
+    expect(liveIds.filter((id: number) => !activeIds.includes(id))).toEqual([5]);
   });
 });
