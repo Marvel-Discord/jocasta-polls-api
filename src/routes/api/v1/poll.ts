@@ -45,7 +45,9 @@ pollRouter.get("/", async (req, res) => {
       search,
       ids,
       num,
-      state,
+      active,
+      has_start,
+      has_end,
       active_or_persistent,
       page,
       limit,
@@ -56,7 +58,7 @@ pollRouter.get("/", async (req, res) => {
 
     let hasManagementPerms = false;
 
-    if (published === false || state === "start") {
+    if (published === false) {
       hasManagementPerms = await attachManagementPermsFlag(req);
       if (!hasManagementPerms) {
         throw new ApiError("You cannot view unpublished polls", 403);
@@ -69,7 +71,9 @@ pollRouter.get("/", async (req, res) => {
       tag,
       ids,
       num,
-      state,
+      active,
+      has_start,
+      has_end,
       active_or_persistent,
       user: userId
         ? {

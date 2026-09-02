@@ -138,13 +138,22 @@ describe("bot poll reads", () => {
     });
   });
 
-  it("state=start passes through to the scheduled poll only", async () => {
+  it("start-timer composition (published=false&has_start=true) returns the scheduled poll only", async () => {
     const response = await request(app)
-      .get(`/api/v1/bot/polls?guildId=${GUILD}&state=start`)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&published=false&has_start=true`)
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+  });
+
+  it("end-timer composition (active=true&has_end=true) returns the end-scheduled poll only", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&active=true&has_end=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4]);
   });
 
   it("active_or_persistent=true passes through to active/persistent polls", async () => {

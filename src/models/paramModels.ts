@@ -65,7 +65,9 @@ const PollFilterParamsModel = z
       .transform((val) => val.split(",").map(Number))
       .optional(),
     num: IntFilter.optional(),
-    state: z.enum(["start", "end"]).optional(),
+    active: BooleanFilter.optional(),
+    has_start: BooleanFilter.optional(),
+    has_end: BooleanFilter.optional(),
     active_or_persistent: BooleanFilter.optional(),
     ...PaginationModel.shape,
   })
@@ -116,7 +118,9 @@ export interface PollFilterParams {
   search?: string;
   ids?: number[];
   num?: number;
-  state?: "start" | "end";
+  active?: boolean;
+  has_start?: boolean;
+  has_end?: boolean;
   active_or_persistent?: boolean;
 
   page?: number;
@@ -153,7 +157,9 @@ export async function parsePollFilterParams(
     search: result.data.search,
     ids: result.data.ids,
     num: result.data.num,
-    state: result.data.state,
+    active: result.data.active,
+    has_start: result.data.has_start,
+    has_end: result.data.has_end,
     active_or_persistent: result.data.active_or_persistent,
     page: result.data.page,
     limit: result.data.limit,
@@ -166,11 +172,13 @@ export async function parsePollFilterParams(
     if (result.data.order === "random") {
       if (
         result.data.num !== undefined ||
-        result.data.state !== undefined ||
+        result.data.active !== undefined ||
+        result.data.has_start !== undefined ||
+        result.data.has_end !== undefined ||
         result.data.active_or_persistent !== undefined
       ) {
         throw new BadRequestError(
-          "'num', 'state', and 'active_or_persistent' are not supported with order=random"
+          "'num', 'active', 'active_or_persistent', 'has_start', and 'has_end' are not supported with order=random"
         );
       }
       if (result.data.seed !== undefined) {

@@ -293,11 +293,12 @@ function matchIdFilter(id: number, cond: unknown): boolean {
   return unsupported("poll where id", cond);
 }
 
-function matchNotNullFilter(
+function matchNullableFilter(
   value: Date | null,
   cond: unknown,
   what: string,
 ): boolean {
+  if (cond === null) return value === null;
   if (isRecord(cond) && hasExactKeys(cond, ["not"]) && cond.not === null) {
     return value !== null;
   }
@@ -365,7 +366,7 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
         break;
       case "start_time":
       case "end_time":
-        ok = matchNotNullFilter(poll[key], cond, `poll where ${key}`);
+        ok = matchNullableFilter(poll[key], cond, `poll where ${key}`);
         break;
       case "votes":
         ok = matchVotesRelation(votesFor(poll.id), cond);

@@ -1,11 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import request from "supertest";
+import type { Express } from "express";
 
+import { createApp } from "@/app";
 import { BadRequestError } from "@/errors";
 import {
   type PollFilterParams,
   parsePollFilterParams,
 } from "@/models/paramModels";
 import { buildPollAuxFilters, mergeAuxFilters } from "@/services/pollService";
+import { FIXTURE_GUILD_ID } from "./fixtures";
+
+const GUILD = FIXTURE_GUILD_ID.toString();
+
+let app: Express;
+
+beforeAll(async () => {
+  app = await createApp();
+});
 
 describe("buildPollAuxFilters", () => {
   it("returns an empty object for empty params", () => {
@@ -26,17 +38,42 @@ describe("buildPollAuxFilters", () => {
     expect(buildPollAuxFilters({ num: 7 })).toEqual({ num: 7 });
   });
 
-  it("state=start couples start_time NOT NULL with published=false", () => {
-    expect(buildPollAuxFilters({ state: "start" })).toEqual({
+  it("active=true maps to an active equality filter", () => {
+    expect(buildPollAuxFilters({ active: true })).toEqual({ active: true });
+  });
+
+  it("active=false maps to an active equality filter", () => {
+    expect(buildPollAuxFilters({ active: false })).toEqual({ active: false });
+  });
+
+  it("has_start=true maps to start_time IS NOT NULL", () => {
+    expect(buildPollAuxFilters({ has_start: true })).toEqual({
       start_time: { not: null },
-      published: false,
     });
   });
 
-  it("state=end couples end_time NOT NULL with active=true", () => {
-    expect(buildPollAuxFilters({ state: "end" })).toEqual({
+  it("has_start=false maps to start_time IS NULL (literal null)", () => {
+    expect(buildPollAuxFilters({ has_start: false })).toEqual({
+      start_time: null,
+    });
+  });
+
+  it("has_end=true maps to end_time IS NOT NULL", () => {
+    expect(buildPollAuxFilters({ has_end: true })).toEqual({
       end_time: { not: null },
-      active: true,
+    });
+  });
+
+  it("has_end=false maps to end_time IS NULL (literal null)", () => {
+    expect(buildPollAuxFilters({ has_end: false })).toEqual({
+      end_time: null,
+    });
+  });
+
+  it("combines has_start=false with has_end=true", () => {
+    expect(buildPollAuxFilters({ has_start: false, has_end: true })).toEqual({
+      start_time: null,
+      end_time: { not: null },
     });
   });
 
@@ -50,46 +87,40 @@ describe("buildPollAuxFilters", () => {
     expect(buildPollAuxFilters({ active_or_persistent: false })).toEqual({});
   });
 
-  it("combines ids, num, state, and active_or_persistent into one fragment", () => {
+  it("combines ids, num, and the boolean predicates into one fragment", () => {
     expect(
       buildPollAuxFilters({
         ids: [1, 2, 3],
         num: 42,
-        state: "end",
+        active: true,
+        has_end: true,
         active_or_persistent: true,
       })
     ).toEqual({
       id: { in: [1, 2, 3] },
       num: 42,
-      end_time: { not: null },
       active: true,
+      end_time: { not: null },
       OR: [{ active: true }, { tagRelation: { persistent: true } }],
     });
   });
 
   it("does not mutate the params object", () => {
-    const params = { ids: [9], num: 1, state: "start" as const };
+    const params = { ids: [9], num: 1, active: false, has_end: true };
     buildPollAuxFilters(params);
-    expect(params).toEqual({ ids: [9], num: 1, state: "start" });
-  });
-
-  it("aux keys win over the base builder when spread last (getPolls merge order)", () => {
-    const base = { published: true, guild_id: 123n };
-    const filters = { ...base, ...buildPollAuxFilters({ state: "start" }) };
-
-    expect(filters).toEqual({
-      published: false,
-      guild_id: 123n,
-      start_time: { not: null },
-    });
+    expect(params).toEqual({ ids: [9], num: 1, active: false, has_end: true });
   });
 });
 
 describe("parsePollFilterParams order=random conflicts", () => {
   it.each([
     [{ num: 7 }],
-    [{ state: "start" as const }],
-    [{ state: "end" as const }],
+    [{ active: "true" }],
+    [{ active: "false" }],
+    [{ has_start: "true" }],
+    [{ has_start: "false" }],
+    [{ has_end: "true" }],
+    [{ has_end: "false" }],
     [{ active_or_persistent: "true" }],
     [{ active_or_persistent: "false" }],
   ])("rejects order=random with %o", async (extra) => {
@@ -100,7 +131,7 @@ describe("parsePollFilterParams order=random conflicts", () => {
 
     await expect(promise).rejects.toBeInstanceOf(BadRequestError);
     await expect(promise).rejects.toThrow(
-      "'num', 'state', and 'active_or_persistent' are not supported with order=random"
+      "'num', 'active', 'active_or_persistent', 'has_start', and 'has_end' are not supported with order=random"
     );
   });
 
@@ -113,7 +144,9 @@ describe("parsePollFilterParams order=random conflicts", () => {
     expect(parsed.order).toBe("random");
     expect(parsed.ids).toEqual([12345, 67890]);
     expect(parsed.num).toBeUndefined();
-    expect(parsed.state).toBeUndefined();
+    expect(parsed.active).toBeUndefined();
+    expect(parsed.has_start).toBeUndefined();
+    expect(parsed.has_end).toBeUndefined();
     expect(parsed.active_or_persistent).toBeUndefined();
   });
 });
@@ -212,5 +245,14 @@ describe("mergeAuxFilters", () => {
     expect(
       mergeAuxFilters({ published: true }, { published: false, num: 42 }),
     ).toEqual({ published: false, num: 42 });
+  });
+});
+
+describe("GET /api/v1/polls unpublished gate", () => {
+  it("returns 403 for published=false without an OAuth session", async () => {
+    const response = await request(app).get(
+      `/api/v1/polls?guildId=${GUILD}&published=false`,
+    );
+    expect(response.status).toBe(403);
   });
 });
