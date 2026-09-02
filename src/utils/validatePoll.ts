@@ -1,7 +1,73 @@
 import { BadRequestError } from "@/errors";
 import { Poll } from "@/types";
 
-export function validatePoll(poll: Poll) {
+/** Timestamp accepted on poll write inputs (ISO string or Date instance). */
+export type PollTimeInput = Date | string | null;
+
+/**
+ * Write-input shape accepted by the poll write services. `time` is the
+ * legacy alias for `start_time`; ids may arrive as strings via JSON
+ * bodies (guild_id, message_id, crosspost ids).
+ */
+export interface PollWriteInput {
+  id?: number;
+  question?: string;
+  guild_id?: bigint | string;
+  choices?: string[];
+  tag?: number;
+  image?: string | null;
+  description?: string | null;
+  thread_question?: string | null;
+  show_question?: boolean;
+  show_options?: boolean;
+  show_voting?: boolean;
+  fallback?: boolean;
+  time?: PollTimeInput;
+  start_time?: PollTimeInput;
+  end_time?: PollTimeInput;
+  num?: number;
+  message_id?: string | bigint | null;
+  crosspost_message_ids?: Array<string | bigint>;
+}
+
+/**
+ * Coerces a time input to a Date (JSON strings or Date instances);
+ * null stays null.
+ */
+export function coerceDate(value: PollTimeInput): Date | null {
+  if (value === null) return null;
+  return value instanceof Date ? value : new Date(value);
+}
+
+function millisOf(
+  value: PollTimeInput | undefined,
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return date.getTime();
+}
+
+/**
+ * Resolves the effective start time: `start_time` wins, `time` is the
+ * legacy alias. Providing BOTH with different instants is a 400
+ * ("'time' and 'start_time' conflict; provide one"); equal values pass.
+ */
+export function resolveStartTime(poll: {
+  time?: PollTimeInput;
+  start_time?: PollTimeInput;
+}): PollTimeInput | undefined {
+  if (
+    poll.time !== undefined &&
+    poll.start_time !== undefined &&
+    millisOf(poll.time) !== millisOf(poll.start_time)
+  ) {
+    throw new BadRequestError("'time' and 'start_time' conflict; provide one");
+  }
+  return poll.start_time ?? poll.time;
+}
+
+export function validatePoll(poll: PollWriteInput) {
   if (!poll) {
     throw new BadRequestError("Poll cannot be null or undefined");
   }
@@ -20,7 +86,7 @@ export function validatePoll(poll: Poll) {
 
   if (
     poll.choices.some(
-      (choice) => typeof choice !== "string" || choice.trim() === ""
+      (choice) => typeof choice !== "string" || choice.trim() === "",
     )
   ) {
     throw new BadRequestError("All poll choices must be non-empty strings");
@@ -38,27 +104,37 @@ export function validatePoll(poll: Poll) {
   }
 }
 
-export function validatePublishedPoll(newPoll: Poll, existingPoll: Poll) {
-  if (existingPoll.published) {
-    if (newPoll.choices.length !== existingPoll.choices.length) {
-      throw new BadRequestError(
-        "Cannot change the number of choices for a published poll"
-      );
-    }
+/**
+ * Post-publish immutability matrix: once published, a poll's choices
+ * LENGTH, tag, and start time are frozen (omit = keep; choices CONTENT
+ * and end_time stay editable in any state). The existing poll is a
+ * serialized post-L3 poll, so its `start_time` is the comparison truth;
+ * the incoming start time resolves through the `time` alias first.
+ */
+export function validatePublishedPoll(
+  newPoll: PollWriteInput,
+  existingPoll: Pick<Poll, "published" | "choices" | "tag" | "start_time">,
+) {
+  if (!existingPoll.published) return;
 
-    const newTime = newPoll.time
-      ? newPoll.time instanceof Date
-        ? newPoll.time
-        : new Date(newPoll.time)
-      : null;
-    const existingTime = existingPoll.time
-      ? existingPoll.time instanceof Date
-        ? existingPoll.time
-        : new Date(existingPoll.time)
-      : null;
+  if (
+    newPoll.choices !== undefined &&
+    newPoll.choices.length !== existingPoll.choices.length
+  ) {
+    throw new BadRequestError(
+      "Cannot change the number of choices for a published poll",
+    );
+  }
 
-    if (newTime?.getTime() !== existingTime?.getTime()) {
-      throw new BadRequestError("Cannot change the time of a published poll");
-    }
+  if (newPoll.tag !== undefined && newPoll.tag !== existingPoll.tag) {
+    throw new BadRequestError("Cannot change the tag of a published poll");
+  }
+
+  const newStart = millisOf(resolveStartTime(newPoll));
+  if (
+    newStart !== undefined &&
+    newStart !== millisOf(existingPoll.start_time)
+  ) {
+    throw new BadRequestError("Cannot change the time of a published poll");
   }
 }

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Response } from "express";
+import { z } from "zod";
 
 import { getBotContext } from "@/context/botContext";
 import {
@@ -20,7 +21,15 @@ import {
   parsePollId,
   parseUserId,
 } from "@/models/paramModels";
-import { getPollById, getPolls } from "@/services/pollService";
+import {
+  createPolls,
+  deletePolls,
+  getPollById,
+  getPolls,
+  serializePoll,
+  updatePolls,
+  updatePollsByTag,
+} from "@/services/pollService";
 import { castVote, getVotesByPoll, getVotesByUser } from "@/services/voteService";
 
 export const botPollRouter = Router();
@@ -46,6 +55,47 @@ function pollFilterOptions(params: PollFilterParams) {
   };
 }
 
+// Bot update-by-tag body: the tag plus the whitelisted bulk fields
+// (anything else — num, message_id, crosspost_message_ids, tag-targeting
+// tricks — is rejected with the offending key names).
+const UpdateByTagBody = z
+  .object({
+    tag: z.number().int().nonnegative(),
+    question: z.string().optional(),
+    description: z.string().nullable().optional(),
+    image: z.string().nullable().optional(),
+    thread_question: z.string().nullable().optional(),
+    show_question: z.boolean().optional(),
+    show_options: z.boolean().optional(),
+    show_voting: z.boolean().optional(),
+    time: z.string().nullable().optional(),
+    start_time: z.string().nullable().optional(),
+    end_time: z.string().nullable().optional(),
+  })
+  .strict();
+
+function parseUpdateByTagBody(body: unknown) {
+  const parsed = UpdateByTagBody.safeParse(body);
+  if (!parsed.success) {
+    const unknownKeys = parsed.error.issues
+      .filter((issue) => issue.code === "unrecognized_keys")
+      .flatMap((issue) => {
+        const rec = issue as unknown as Record<string, unknown>;
+        const keys =
+          (rec.params as { keys?: unknown } | undefined)?.keys ?? rec.keys;
+        return Array.isArray(keys) ? (keys as string[]) : [];
+      });
+    if (unknownKeys.length > 0) {
+      throw new BadRequestError(`Unknown fields: ${unknownKeys.join(", ")}`);
+    }
+    throw new BadRequestError(
+      "Invalid update-by-tag body",
+      parsed.error.issues,
+    );
+  }
+  return parsed.data;
+}
+
 botPollRouter.get("/sync", async (req, res) => {
   const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
   const params = await parsePollFilterParams(
@@ -65,7 +115,14 @@ botPollRouter.get("/votes/:userId", async (req, res) => {
   res.status(200).json(votes);
 });
 
-botPollRouter.post("/update-by-tag", (_req, res) => notImplemented(res));
+botPollRouter.post("/update-by-tag", async (req, res) => {
+  const { tag, ...fields } = parseUpdateByTagBody(req.body);
+  const updatedPolls = await updatePollsByTag(tag, fields);
+  res.status(200).json({
+    message: "Polls updated successfully",
+    polls: updatedPolls.map((poll) => serializePoll(poll)),
+  });
+});
 
 botPollRouter.get("/", async (req, res) => {
   const guildId = await parseGuildId(req.query as unknown as GuildIdParams);
@@ -81,9 +138,27 @@ botPollRouter.get("/", async (req, res) => {
   res.status(200).json({ data, meta });
 });
 
-botPollRouter.post("/create", (_req, res) => notImplemented(res));
-botPollRouter.post("/update", (_req, res) => notImplemented(res));
-botPollRouter.post("/delete", (_req, res) => notImplemented(res));
+botPollRouter.post("/create", async (req, res) => {
+  const createdPolls = await createPolls(req.body);
+  res.status(201).json({
+    message: "Polls created successfully",
+    polls: createdPolls.map((poll) => serializePoll(poll)),
+  });
+});
+botPollRouter.post("/update", async (req, res) => {
+  const updatedPolls = await updatePolls(req.body);
+  res.status(200).json({
+    message: "Polls updated successfully",
+    polls: updatedPolls.map((poll) => serializePoll(poll)),
+  });
+});
+botPollRouter.post("/delete", async (req, res) => {
+  const deletedPolls = await deletePolls(req.body?.pollIds);
+  res.status(200).json({
+    message: "Polls deleted successfully",
+    deletedCount: deletedPolls.count,
+  });
+});
 
 botPollRouter.get("/:pollId", async (req, res) => {
   const pollId = await parsePollId(req.params as PollIdParams);

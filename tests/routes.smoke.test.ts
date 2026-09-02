@@ -11,10 +11,6 @@ beforeAll(async () => {
 });
 
 const stubs: Array<{ method: "get" | "post"; path: string }> = [
-  { method: "post", path: "/api/v1/bot/polls/update-by-tag" },
-  { method: "post", path: "/api/v1/bot/polls/create" },
-  { method: "post", path: "/api/v1/bot/polls/update" },
-  { method: "post", path: "/api/v1/bot/polls/delete" },
   { method: "post", path: "/api/v1/bot/polls/12345/publish" },
   { method: "post", path: "/api/v1/bot/polls/12345/end" },
   { method: "post", path: "/api/v1/bot/polls/12345/crosspost" },
