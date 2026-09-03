@@ -17,7 +17,7 @@ BEGIN
     problems := array_append(problems, 'unexpected triggers in public schema');
   END IF;
 
-  expected := 'id|integer|t|;question|text|t|;published|boolean|t|false;active|boolean|t|false;guild_id|bigint|t|;choices|text[]|t|;start_time|timestamp with time zone|f|;end_time|timestamp with time zone|f|;num|integer|f|;message_id|bigint|f|;crosspost_message_ids|bigint[]|f|;tag|integer|f|;image|text|f|;description|text|f|;thread_question|text|f|;show_question|boolean|t|true;show_options|boolean|t|true;show_voting|boolean|t|true;fallback|boolean|t|false';
+  expected := 'id|integer|t|;question|text|t|;published|boolean|t|false;guild_id|bigint|t|;choices|text[]|t|;start_time|timestamp with time zone|f|;end_time|timestamp with time zone|f|;num|integer|f|;message_id|bigint|f|;crosspost_message_ids|bigint[]|f|;tag|integer|t|;image|text|f|;description|text|f|;thread_question|text|f|;show_question|boolean|t|true;show_options|boolean|t|true;show_voting|boolean|t|true;fallback|boolean|t|false';
   SELECT string_agg(a.attname || '|' || format_type(a.atttypid, a.atttypmod) || '|' || CASE WHEN a.attnotnull THEN 't' ELSE 'f' END || '|' || coalesce(pg_get_expr(ad.adbin, ad.adrelid), ''), ';' ORDER BY a.attnum)
   INTO actual
   FROM pg_catalog.pg_attribute a
@@ -74,6 +74,15 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'c' AND conname = 'polls_end_requires_start') THEN
     problems := array_append(problems, 'polls_end_requires_start CHECK missing');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'c' AND conname = 'polls_published_requires_start') THEN
+    problems := array_append(problems, 'polls_published_requires_start CHECK missing');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.votes'::regclass AND contype = 'f' AND conname = 'votes_poll_id_fkey' AND confdeltype = 'c') THEN
+    problems := array_append(problems, 'votes_poll_id_fkey FK missing');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid = 'public.polls'::regclass AND contype = 'f' AND conname = 'polls_tag_fkey' AND confdeltype = 'r') THEN
+    problems := array_append(problems, 'polls_tag_fkey FK missing');
   END IF;
 
   IF cardinality(problems) > 0 THEN

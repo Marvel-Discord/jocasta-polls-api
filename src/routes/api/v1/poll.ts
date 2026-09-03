@@ -48,7 +48,7 @@ pollRouter.get("/", async (req, res) => {
       active,
       has_start,
       has_end,
-      active_or_persistent,
+      live,
       page,
       limit,
       order,
@@ -74,7 +74,7 @@ pollRouter.get("/", async (req, res) => {
       active,
       has_start,
       has_end,
-      active_or_persistent,
+      live,
       user: userId
         ? {
             userId: userId,
@@ -265,6 +265,10 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
     normalizedPollsData.forEach((poll) => {
       validatePoll(poll);
 
+      if (poll.tag === undefined) {
+        throw new BadRequestError("Poll tag is required");
+      }
+
       if (poll.guild_id !== config.guildId) {
         throw new ApiError("Cannot create polls for other guilds", 403);
       }
@@ -292,7 +296,6 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
             id: pollId,
             question: poll.question,
             published: false, // Always false initially like bot
-            active: false, // Always false initially like bot
             guild_id: poll.guild_id,
             choices: poll.choices,
             start_time: poll.time ? new Date(poll.time) : null,
@@ -327,7 +330,7 @@ pollRouter.post("/create", requireManagementPerms, async (req, res) => {
     );
     res.status(201).json({
       message: "Polls created successfully",
-      polls: createdPolls.map(serializePoll),
+      polls: createdPolls.map((poll) => serializePoll(poll)),
     });
   } catch (error) {
     ApiError.sendError(res, error);
@@ -407,7 +410,6 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
                 BigInt(id)
               ),
             }),
-            ...(poll.active !== undefined && { active: poll.active }),
             // Preserve published state from existing poll
             published: existingPoll.published,
           },
@@ -429,7 +431,7 @@ pollRouter.post("/update", requireManagementPerms, async (req, res) => {
     );
     res.status(200).json({
       message: "Polls updated successfully",
-      polls: updatedPolls.map(serializePoll),
+      polls: updatedPolls.map((poll) => serializePoll(poll)),
     });
   } catch (error) {
     ApiError.sendError(res, error);

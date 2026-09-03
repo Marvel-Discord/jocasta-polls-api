@@ -6,7 +6,6 @@ const BASE_POLL = {
   id: 42,
   question: "Best hero?",
   published: true,
-  active: true,
   guild_id: BigInt("123456789"),
   choices: ["A", "B", "C"],
   start_time: new Date("2026-01-01T12:00:00Z"),
@@ -123,5 +122,55 @@ describe("serializePoll", () => {
     const result = serializePoll(poll);
 
     expect(result.end_time).toBe(end);
+  });
+
+  it("derives active=true while started and not ended (injected now)", () => {
+    const poll = makePoll({ votes: [] });
+    const now = new Date("2026-01-04T12:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(true);
+  });
+
+  it("derives active=false before the start time", () => {
+    const poll = makePoll({ votes: [] });
+    const now = new Date("2025-12-25T12:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(false);
+  });
+
+  it("derives active=false for unpublished polls regardless of timing", () => {
+    const poll = makePoll({ published: false, votes: [] });
+    const now = new Date("2026-01-04T12:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(false);
+  });
+
+  it("derives active=true for open-ended polls once started (end null)", () => {
+    const poll = makePoll({ end_time: null, votes: [] });
+    const now = new Date("2030-01-01T00:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(true);
+  });
+
+  it("derives active=false at exactly the end time", () => {
+    const poll = makePoll({ votes: [] });
+    const now = new Date("2026-01-08T12:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(false);
+  });
+
+  it("derives active=false without a start time", () => {
+    const poll = makePoll({ start_time: null, end_time: null, votes: [] });
+    const now = new Date("2026-01-04T12:00:00Z");
+
+    expect(serializePoll(poll, now).active).toBe(false);
+  });
+
+  it("emits tag as a non-null number", () => {
+    const poll = makePoll({ votes: [] });
+    const result = serializePoll(poll, new Date("2026-01-04T12:00:00Z"));
+
+    expect(result.tag).toBe(3);
+    expect(typeof result.tag).toBe("number");
   });
 });

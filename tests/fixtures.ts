@@ -23,17 +23,18 @@ export const FIXTURE_USER_ID = 111111111111111111n;
 export const FIXTURE_OTHER_USER_ID = 222222222222222222n;
 export const FIXTURE_THIRD_USER_ID = 333333333333333333n;
 
-const P1_START = new Date("2026-01-15T12:00:00.000Z");
-const P2_START = new Date("2026-02-15T12:00:00.000Z");
-const P4_START = new Date("2026-03-15T12:00:00.000Z");
-const P3_START = new Date("2027-06-01T12:00:00.000Z"); // future-ish constant
-const P4_END = new Date("2027-07-01T12:00:00.000Z");
+const P1_START = new Date("2024-01-15T12:00:00.000Z");
+const P2_START = new Date("2024-02-15T12:00:00.000Z");
+const P4_START = new Date("2024-03-15T12:00:00.000Z");
+const P3_START = new Date("2030-06-01T12:00:00.000Z"); // far-future constant
+const P4_END = new Date("2030-07-01T12:00:00.000Z");
+const P5_START = new Date("2023-05-01T12:00:00.000Z");
+const P5_END = new Date("2024-05-01T12:00:00.000Z");
 
 export type FixturePoll = {
   id: number;
   question: string;
   published: boolean;
-  active: boolean;
   guild_id: bigint;
   choices: string[];
   start_time: Date | null;
@@ -41,7 +42,7 @@ export type FixturePoll = {
   num: number | null;
   message_id: bigint | null;
   crosspost_message_ids: bigint[];
-  tag: number | null;
+  tag: number;
   image: string | null;
   description: string | null;
   thread_question: string | null;
@@ -86,16 +87,19 @@ export type FixtureGuildSettings = {
 };
 
 // P1: published, visible voting, persistent tag 1, votes 2 -> choice 0, 1 -> choice 1.
-// P2: published, hidden voting (show_voting false), 2 votes, tagless.
-// P3: unpublished, tagless, scheduled (start_time set, end_time null), no votes.
-// P4: published, end-scheduled (end_time set, active), non-persistent tag 2, 1 vote.
+//     Started, open-ended (end null) -> derives active.
+// P2: published, hidden voting (show_voting false), 2 votes, persistent tag 1
+//     (matches both live-filter OR arms: derived-active AND persistent).
+//     Started, open-ended -> derives active.
+// P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
+// P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
+// P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
 // FIXTURE_USER_ID votes on P1 + P2 only, so published/notVoted leaves P4.
 export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 1,
     question: "P1 published visible voting",
     published: true,
-    active: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P1 choice 0", "P1 choice 1"],
     start_time: P1_START,
@@ -116,7 +120,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     id: 2,
     question: "P2 published hidden voting",
     published: true,
-    active: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P2 choice 0", "P2 choice 1"],
     start_time: P2_START,
@@ -124,7 +127,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     num: 2,
     message_id: 1002n,
     crosspost_message_ids: [],
-    tag: null,
+    tag: 1,
     image: null,
     description: "P2 description",
     thread_question: null,
@@ -137,7 +140,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     id: 3,
     question: "P3 unpublished scheduled",
     published: false,
-    active: false,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P3 choice 0", "P3 choice 1"],
     start_time: P3_START,
@@ -145,7 +147,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     num: null,
     message_id: null,
     crosspost_message_ids: [],
-    tag: null,
+    tag: 2,
     image: null,
     description: null,
     thread_question: null,
@@ -158,7 +160,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     id: 4,
     question: "P4 published end scheduled",
     published: true,
-    active: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P4 choice 0", "P4 choice 1"],
     start_time: P4_START,
@@ -167,6 +168,26 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     message_id: 1004n,
     crosspost_message_ids: [],
     tag: 2,
+    image: null,
+    description: null,
+    thread_question: null,
+    show_question: true,
+    show_options: true,
+    show_voting: true,
+    fallback: false,
+  },
+  {
+    id: 5,
+    question: "P5 published ended persistent",
+    published: true,
+    guild_id: FIXTURE_GUILD_ID,
+    choices: ["P5 choice 0", "P5 choice 1"],
+    start_time: P5_START,
+    end_time: P5_END,
+    num: 3,
+    message_id: 1005n,
+    crosspost_message_ids: [],
+    tag: 1,
     image: null,
     description: null,
     thread_question: null,
@@ -302,6 +323,17 @@ function matchNullableFilter(
   if (isRecord(cond) && hasExactKeys(cond, ["not"]) && cond.not === null) {
     return value !== null;
   }
+  if (
+    isRecord(cond) &&
+    hasExactKeys(cond, ["lte"]) &&
+    cond.lte instanceof Date
+  ) {
+    // SQL semantics: a NULL timestamp fails every comparison.
+    return value !== null && value.getTime() <= cond.lte.getTime();
+  }
+  if (isRecord(cond) && hasExactKeys(cond, ["gt"]) && cond.gt instanceof Date) {
+    return value !== null && value.getTime() > cond.gt.getTime();
+  }
   return unsupported(what, cond);
 }
 
@@ -322,10 +354,7 @@ function matchVotesRelation(votes: FixtureVote[], cond: unknown): boolean {
 function matchTagRelation(poll: FixturePoll, cond: unknown): boolean {
   const persistent = isRecord(cond) ? cond.persistent : undefined;
   if (persistent !== true) return unsupported("poll where tagRelation", cond);
-  const tagRow =
-    poll.tag === null
-      ? undefined
-      : FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
+  const tagRow = FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
   return tagRow !== undefined && tagRow.persistent;
 }
 
@@ -348,6 +377,11 @@ function matchChoicesHas(choices: string[], cond: unknown): boolean {
 }
 
 function matchPoll(poll: FixturePoll, where: unknown): boolean {
+  // Runtime enforcement of the post-2_finalize_schema invariant: `tag` is
+  // NOT NULL in production, so a null-tag fixture row is an unsupported
+  // shape even though the FixturePoll type already forbids it.
+  const tag: number | null = poll.tag;
+  if (tag === null) return unsupported("poll tag (NOT NULL)", tag);
   if (where === undefined) return true;
   if (!isRecord(where)) return unsupported("poll where", where);
   for (const [key, cond] of Object.entries(where)) {
@@ -359,7 +393,6 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
         break;
       case "guild_id":
       case "published":
-      case "active":
       case "tag":
       case "num":
         ok = poll[key] === cond;
@@ -386,6 +419,10 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
         break;
       case "AND":
         ok = Array.isArray(cond) && cond.every((sub) => matchPoll(poll, sub));
+        break;
+      case "NOT":
+        if (!isRecord(cond)) return unsupported("poll where NOT", cond);
+        ok = !matchPoll(poll, cond);
         break;
       default:
         return unsupported(`poll where ${key}`, cond);
