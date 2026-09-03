@@ -8,7 +8,7 @@ import {
   type PollFilterParams,
   parsePollFilterParams,
 } from "@/models/paramModels";
-import { buildPollAuxFilters } from "@/services/pollService";
+import { buildPollAuxFilters } from "@/services/pollFilters";
 import { FIXTURE_GUILD_ID } from "./fixtures";
 
 const GUILD = FIXTURE_GUILD_ID.toString();

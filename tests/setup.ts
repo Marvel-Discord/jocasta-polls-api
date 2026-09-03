@@ -5,13 +5,20 @@ import { vi } from "vitest";
 // app via createApp() instead, so mirror the production patch here.
 import "@/utils";
 
+import { FIXTURE_GUILD_ID } from "./fixtures";
+
 process.env.NODE_ENV = "test";
 process.env.DISCORD_CLIENT_ID ||= "test-client-id";
-process.env.DISCORD_CLIENT_SECRET ||= "test-client-secret";
+process.env.DISCORD_CLIENT_SECRET ||= "test-discord-secret";
 process.env.DISCORD_REDIRECT_URI ||= "http://localhost:3000/callback";
 process.env.DISCORD_BOT_TOKEN ||= "test-bot-token";
 process.env.EXPRESS_SESSION_SECRET ||= "test-session-secret";
-process.env.GUILD_ID ||= "0";
+// The poll write services scope every mutation to config.guildId, so the
+// test guild MUST be the fixture guild. Forced (not ||=) for determinism:
+// an inherited dev GUILD_ID would silently break the write tests.
+// config reads this at module evaluation, which happens after this
+// setup file runs.
+process.env.GUILD_ID = FIXTURE_GUILD_ID.toString();
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:1/test";
 process.env.BOT_SERVICE_TOKEN ||= "test-bot-service-token";
 

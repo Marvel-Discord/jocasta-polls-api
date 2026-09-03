@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { serializePoll } from "@/services/pollService";
+import { serializePoll } from "@/services/pollSerializer";
 
 const BASE_POLL = {
   id: 42,

@@ -1,16 +1,10 @@
-import { Prisma, type Poll as PollModel } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
+import { type PollFilterUser, buildPollAuxFilters } from "@/services/pollFilters";
+import { serializePoll } from "@/services/pollSerializer";
 import type { Meta, Poll } from "@/types";
 import { OrderDir, OrderType } from "@/types";
-
-/**
- * User filtering options for polls
- */
-export interface PollFilterUser {
-  userId: bigint;
-  notVoted?: boolean;
-}
 
 /**
  * Comprehensive filtering and pagination options for poll queries
@@ -34,16 +28,6 @@ interface PollFilters {
   orderDir?: OrderDir;
   seed?: number;
 }
-
-/**
- * Extended poll type that includes vote relation data for processing
- */
-type PollWithVotes = PollModel & {
-  votes: { choice: number }[];
-  tagRelation?: unknown;
-};
-
-// ===== UTILITY FUNCTIONS =====
 
 /**
  * Sanitizes search input for safe use in database queries
@@ -82,52 +66,6 @@ function createPaginationMeta(
     ...(randomSeed !== undefined ? { randomSeed } : {}),
   };
 }
-
-/**
- * Derives poll activity from timestamps: a poll is active when it is
- * published, has started, and has not ended. Open-ended polls (NULL
- * end_time) stay active once started. At `now === end_time` exactly the
- * poll is inactive.
- */
-export function computeActive(
-  poll: Pick<PollModel, "published" | "start_time" | "end_time">,
-  now: Date = new Date(),
-): boolean {
-  return (
-    poll.published &&
-    poll.start_time !== null &&
-    poll.start_time <= now &&
-    (poll.end_time === null || poll.end_time > now)
-  );
-}
-
-/**
- * Serializes a poll with its vote relation into the API contract shape:
- * tallies votes per choice, emits start_time/end_time, derives `active`
- * from the timestamps (the model no longer stores it), and keeps time as
- * the compatibility alias for start_time (website; removable post-migration)
- */
-export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll {
-  const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
-  const totalVotes = votes.length;
-  const voteCounts = new Array<number>(restPoll.choices.length).fill(0);
-  for (const vote of votes) {
-    if (vote.choice >= 0 && vote.choice < voteCounts.length) {
-      voteCounts[vote.choice] += 1;
-    }
-  }
-  return {
-    ...restPoll,
-    active: computeActive(poll, now),
-    votes: voteCounts,
-    total_votes: totalVotes,
-    start_time,
-    end_time,
-    time: start_time,
-  };
-}
-
-// ===== QUERY BUILDERS =====
 
 /**
  * Builds Prisma where conditions for poll filtering
@@ -175,55 +113,6 @@ function buildPollFilters(options: {
 }
 
 /**
- * Builds the derived-active where fragment: published, started, and not
- * ended (open-ended polls count as not ended). One helper, two consumers:
- * the `active` filter and the derived arm of the `live` filter.
- */
-function derivedActiveWhere(now: Date): Prisma.PollWhereInput {
-  return {
-    published: true,
-    start_time: { lte: now },
-    OR: [{ end_time: null }, { end_time: { gt: now } }],
-  };
-}
-
-/**
- * Builds the bot-facing aux list filters (ids, num, active, has_start,
- * has_end, live) as an array of conjuncts for AND-appending. Pure — no DB
- * access — so it can be unit tested directly and composed into the list
- * path's filters object. Each conjunct is self-contained: no fragment ever
- * writes a top-level OR into the shared filters.
- */
-export function buildPollAuxFilters(
-  params: {
-    ids?: number[];
-    num?: number;
-    active?: boolean;
-    has_start?: boolean;
-    has_end?: boolean;
-    live?: boolean;
-  },
-  now: Date = new Date(),
-): Prisma.PollWhereInput[] {
-  const conjuncts: Prisma.PollWhereInput[] = [];
-  if (params.ids?.length) conjuncts.push({ id: { in: params.ids } });
-  if (params.num !== undefined) conjuncts.push({ num: params.num });
-  if (params.active === true) conjuncts.push(derivedActiveWhere(now));
-  else if (params.active === false)
-    conjuncts.push({ NOT: derivedActiveWhere(now) });
-  if (params.has_start === true) conjuncts.push({ start_time: { not: null } });
-  else if (params.has_start === false) conjuncts.push({ start_time: null });
-  if (params.has_end === true) conjuncts.push({ end_time: { not: null } });
-  else if (params.has_end === false) conjuncts.push({ end_time: null });
-  if (params.live === true) {
-    conjuncts.push({
-      OR: [derivedActiveWhere(now), { tagRelation: { persistent: true } }],
-    });
-  }
-  return conjuncts;
-}
-
-/**
  * Gets poll IDs that a user has voted on, with optional filtering
  */
 async function getUserVotedPollIds(user?: PollFilterUser) {
@@ -253,8 +142,6 @@ async function getUserVotedPollIds(user?: PollFilterUser) {
 function getOrderDirection(orderDir?: OrderDir): "asc" | "desc" {
   return orderDir === OrderDir.Asc ? "asc" : "desc";
 }
-
-// ===== MAIN SERVICE FUNCTIONS =====
 
 /**
  * Retrieves polls with filtering, pagination, and sorting options

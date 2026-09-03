@@ -2,8 +2,9 @@
  * Fixture-backed prisma mock for route tests.
  *
  * Exports hand-tunable fixture data plus `createFixturePrisma()`, whose
- * delegates implement exactly the query shapes the read services really
- * issue (pollService / voteService / tagService / guildService).
+ * delegates implement exactly the query shapes the services really
+ * issue (pollService reads + writes / voteService reads + castVote
+ * writes / tagService / guildService).
  *
  * Design notes:
  * - Votes live flat in FIXTURE_VOTES; the poll delegates join them onto
@@ -20,6 +21,9 @@
 
 export const FIXTURE_GUILD_ID = 281648235557421056n;
 export const FIXTURE_USER_ID = 111111111111111111n;
+// The sole role allowed to manage polls per the fixture guild settings;
+// the revalidation gate tests intersect mocked member roles against it.
+export const FIXTURE_MANAGER_ROLE_ID = 444444444444444444n;
 export const FIXTURE_OTHER_USER_ID = 222222222222222222n;
 export const FIXTURE_THIRD_USER_ID = 333333333333333333n;
 
@@ -250,7 +254,7 @@ export const FIXTURE_GUILD_SETTINGS: FixtureGuildSettings[] = [
     guild_id: FIXTURE_GUILD_ID,
     default_channel_id: 101n,
     manage_channel_id: [],
-    manager_role_id: [],
+    manager_role_id: [FIXTURE_MANAGER_ROLE_ID],
     default_colour: null,
     fallback_channel_id: null,
   },
@@ -268,6 +272,7 @@ type MockArgs = {
   skip?: number;
   by?: unknown;
   _count?: unknown;
+  data?: unknown;
 };
 
 function unsupported(what: string, value: unknown): never {
@@ -529,6 +534,99 @@ async function pollCount(args: MockArgs = {}): Promise<number> {
   return FIXTURE_POLLS.filter((poll) => matchPoll(poll, args.where)).length;
 }
 
+const POLL_FIELD_NAMES = new Set([
+  "id",
+  "question",
+  "published",
+  "guild_id",
+  "choices",
+  "start_time",
+  "end_time",
+  "num",
+  "message_id",
+  "crosspost_message_ids",
+  "tag",
+  "image",
+  "description",
+  "thread_question",
+  "show_question",
+  "show_options",
+  "show_voting",
+  "fallback",
+]);
+
+async function pollCreate(args: MockArgs): Promise<Row> {
+  const data = args.data;
+  if (
+    !isRecord(data) ||
+    !hasExactKeys(data, [...POLL_FIELD_NAMES]) ||
+    typeof data.id !== "number" ||
+    typeof data.question !== "string" ||
+    typeof data.guild_id !== "bigint" ||
+    !Array.isArray(data.choices) ||
+    typeof data.tag !== "number"
+  ) {
+    return unsupported("poll.create data", data);
+  }
+  if (FIXTURE_POLLS.some((poll) => poll.id === data.id)) {
+    // Real prisma enforces the PK; mirror it so id collisions fail
+    // loudly instead of double-creating.
+    throw new Error(
+      `fixture prisma mock: poll.create duplicate id ${data.id} (PK)`,
+    );
+  }
+  const row = { ...data } as FixturePoll;
+  FIXTURE_POLLS.push(row);
+  return shapePollRow(row, args.include, args.select);
+}
+
+async function pollUpdate(args: MockArgs): Promise<Row> {
+  const where = args.where;
+  const data = args.data;
+  const id =
+    isRecord(where) && hasExactKeys(where, ["id"]) ? where.id : undefined;
+  if (id === undefined || !isRecord(data)) {
+    return unsupported("poll.update args", { where, data });
+  }
+  const poll = FIXTURE_POLLS.find((poll) => poll.id === id);
+  if (poll === undefined) {
+    throw new Error(`fixture prisma mock: poll.update unknown id ${id}`);
+  }
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue; // prisma skips undefined fields
+    if (!POLL_FIELD_NAMES.has(key)) {
+      return unsupported("poll.update data key", { key, value });
+    }
+    (poll as unknown as Record<string, unknown>)[key] = value;
+  }
+  return shapePollRow(poll, args.include, args.select);
+}
+
+/**
+ * Models the FK cascade: deleting polls removes their votes. Only the
+ * id-in shape the write services issue is supported.
+ */
+async function pollDeleteMany(args: MockArgs): Promise<{ count: number }> {
+  const where = args.where;
+  const cond =
+    isRecord(where) && hasExactKeys(where, ["id"]) ? where.id : undefined;
+  const ids = isRecord(cond) && Array.isArray(cond.in) ? cond.in : undefined;
+  if (ids === undefined || !ids.every((id) => typeof id === "number")) {
+    return unsupported("poll.deleteMany where", where);
+  }
+  const doomed = FIXTURE_POLLS.filter((poll) => ids.includes(poll.id));
+  for (const poll of doomed) {
+    FIXTURE_POLLS.splice(FIXTURE_POLLS.indexOf(poll), 1);
+  }
+  const doomedVotes = FIXTURE_VOTES.filter((vote) =>
+    ids.includes(vote.poll_id),
+  );
+  for (const vote of doomedVotes) {
+    FIXTURE_VOTES.splice(FIXTURE_VOTES.indexOf(vote), 1);
+  }
+  return { count: doomed.length };
+}
+
 async function voteGroupBy(
   args: MockArgs,
 ): Promise<Array<{ choice: number; _count: { choice: number } }>> {
@@ -570,6 +668,68 @@ async function voteFindMany(args: MockArgs = {}): Promise<Row[]> {
     (vote) =>
       args.select !== undefined ? pickSelect({ ...vote }, args.select) : { ...vote },
   );
+}
+
+async function voteCreate(args: MockArgs): Promise<Row> {
+  const data = args.data;
+  if (
+    !isRecord(data) ||
+    !hasExactKeys(data, ["id", "user_id", "poll_id", "choice"]) ||
+    typeof data.id !== "bigint" ||
+    typeof data.user_id !== "bigint" ||
+    typeof data.poll_id !== "number" ||
+    typeof data.choice !== "number"
+  ) {
+    return unsupported("vote.create data", data);
+  }
+  if (FIXTURE_VOTES.some((vote) => vote.id === data.id)) {
+    // Real prisma enforces the PK; mirror it so id-scheme collisions
+    // fail loudly instead of silently double-counting.
+    throw new Error(
+      `fixture prisma mock: vote.create duplicate id ${data.id} (PK)`,
+    );
+  }
+  const row: FixtureVote = {
+    id: data.id,
+    user_id: data.user_id,
+    poll_id: data.poll_id,
+    choice: data.choice,
+  };
+  FIXTURE_VOTES.push(row);
+  return { ...row };
+}
+
+async function voteUpdate(args: MockArgs): Promise<Row> {
+  const where = args.where;
+  const data = args.data;
+  const id =
+    isRecord(where) && hasExactKeys(where, ["id"]) ? where.id : undefined;
+  if (
+    id === undefined ||
+    !isRecord(data) ||
+    !hasExactKeys(data, ["choice"]) ||
+    typeof data.choice !== "number"
+  ) {
+    return unsupported("vote.update args", { where, data });
+  }
+  const vote = FIXTURE_VOTES.find((vote) => vote.id === id);
+  if (vote === undefined) {
+    throw new Error(`fixture prisma mock: vote.update unknown id ${id}`);
+  }
+  vote.choice = data.choice;
+  return { ...vote };
+}
+
+async function voteDeleteMany(args: MockArgs): Promise<{ count: number }> {
+  const where = args.where;
+  if (!isRecord(where) || !hasExactKeys(where, ["user_id", "poll_id"])) {
+    return unsupported("vote.deleteMany where", where);
+  }
+  const doomed = FIXTURE_VOTES.filter((vote) => matchVote(vote, where));
+  for (const vote of doomed) {
+    FIXTURE_VOTES.splice(FIXTURE_VOTES.indexOf(vote), 1);
+  }
+  return { count: doomed.length };
 }
 
 async function tagFindMany(args: MockArgs = {}): Promise<Row[]> {
@@ -630,9 +790,13 @@ async function guildSettingsFindUnique(args: MockArgs): Promise<Row | null> {
 }
 
 /**
- * Builds the fixture-backed prisma delegate set. Read-only: the mock does
- * not implement write paths or `$queryRaw` (order=random), so those fail
- * loudly if a test reaches them.
+ * Builds the fixture-backed prisma delegate set. Reads plus the write
+ * paths the services issue (voteService.castVote writes, the poll write
+ * services' create/update/deleteMany — poll.deleteMany CASCADEs votes
+ * like the production FK); everything else — other writes, `$queryRaw`
+ * (order=random) — fails loudly if a test reaches it. Write delegates
+ * mutate FIXTURE_POLLS / FIXTURE_VOTES in place, so tests that write
+ * should restore them (see castVote.test.ts / writeServices.test.ts).
  */
 export function createFixturePrisma() {
   return {
@@ -642,11 +806,17 @@ export function createFixturePrisma() {
       findMany: pollFindMany,
       findUnique: pollFindUnique,
       count: pollCount,
+      create: pollCreate,
+      update: pollUpdate,
+      deleteMany: pollDeleteMany,
     },
     vote: {
       groupBy: voteGroupBy,
       findFirst: voteFindFirst,
       findMany: voteFindMany,
+      create: voteCreate,
+      update: voteUpdate,
+      deleteMany: voteDeleteMany,
     },
     tag: {
       findMany: tagFindMany,
