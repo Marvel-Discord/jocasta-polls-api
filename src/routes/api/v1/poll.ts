@@ -12,14 +12,9 @@ import {
   type UserIdParams,
   VoteParams,
 } from "@/models/paramModels";
-import {
-  createPolls,
-  deletePolls,
-  getPollById,
-  getPolls,
-  serializePoll,
-  updatePolls,
-} from "@/services/pollService";
+import { getPollById, getPolls } from "@/services/pollReadService";
+import { serializePoll } from "@/services/pollSerializer";
+import { createPolls, deletePolls, updatePolls } from "@/services/pollWriteService";
 import {
   castVote,
   getVote,

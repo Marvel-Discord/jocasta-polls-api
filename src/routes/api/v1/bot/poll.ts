@@ -22,15 +22,14 @@ import {
   parsePollId,
   parseUserId,
 } from "@/models/paramModels";
+import { getPollById, getPolls } from "@/services/pollReadService";
+import { serializePoll } from "@/services/pollSerializer";
 import {
   createPolls,
   deletePolls,
-  getPollById,
-  getPolls,
-  serializePoll,
   updatePolls,
   updatePollsByTag,
-} from "@/services/pollService";
+} from "@/services/pollWriteService";
 import { castVote, getVotesByPoll, getVotesByUser } from "@/services/voteService";
 
 export const botPollRouter = Router();

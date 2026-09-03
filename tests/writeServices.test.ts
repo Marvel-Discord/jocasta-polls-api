@@ -47,7 +47,7 @@ import {
   updatePolls,
   updatePollsByTag,
   type PollTagUpdateFields,
-} from "@/services/pollService";
+} from "@/services/pollWriteService";
 import { castVote } from "@/services/voteService";
 import type { PollWriteInput } from "@/utils/validatePoll";
 import {
