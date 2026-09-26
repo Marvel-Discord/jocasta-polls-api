@@ -15,7 +15,7 @@ const BooleanFilter = z
 
 const IntFilter = z.coerce.number().int().positive();
 
-const BigIntFilter = z.coerce.bigint().positive();
+export const BigIntFilter = z.coerce.bigint().positive();
 
 const GuildIdParamModel = z.object({
   guildId: BigIntFilter,

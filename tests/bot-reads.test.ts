@@ -1,8 +1,9 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { Express } from "express";
 
 import { createApp } from "@/app";
+import { prisma } from "@/client";
 import { FIXTURE_GUILD_ID, FIXTURE_USER_ID } from "./fixtures";
 
 let app: Express;
@@ -164,6 +165,64 @@ describe("bot poll reads", () => {
       nextPage: 3,
       prevPage: 1,
     });
+  });
+
+  it("sync without a published param returns both published and unpublished polls", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5]);
+  });
+
+  it("sync with published=false returns only the unpublished P3", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&published=false`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+  });
+
+  it("sync with published=true returns only the published polls", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&published=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1, 5]);
+  });
+
+  it("sync with published=false&order=random keeps the unpublished filter in the raw SQL", async () => {
+    // The fixture prisma does not implement $queryRaw (order=random), so
+    // capture the generated statement instead of executing it; the id
+    // query yields only the unpublished P3, and hydration follows it.
+    const queryRaw = vi.fn(async (_statement: unknown) => [{ id: 3 }]);
+    const prismaWithRaw = prisma as unknown as { $queryRaw?: unknown };
+    prismaWithRaw.$queryRaw = queryRaw;
+    try {
+      const response = await request(app)
+        .get(
+          `/api/v1/bot/polls/sync?guildId=${GUILD}&published=false&order=random`,
+        )
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+
+      const statement = queryRaw.mock.calls[0][0] as {
+        text: string;
+        values: unknown[];
+      };
+      const interpolated = statement.text.replace(
+        /\$(\d+)/g,
+        (_, i) => `${statement.values[Number(i) - 1]}`,
+      );
+      expect(interpolated).toContain("AND published = false");
+    } finally {
+      delete prismaWithRaw.$queryRaw;
+    }
   });
 
   it("start-timer composition (published=false&has_start=true) returns the scheduled poll only", async () => {

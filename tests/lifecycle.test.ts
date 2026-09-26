@@ -30,6 +30,7 @@ vi.mock("@/services/discordService", async (importOriginal) => {
 });
 
 import { createApp } from "@/app";
+import { prisma } from "@/client";
 import { BadRequestError, NotFoundError } from "@/errors";
 import {
   crosspostPoll,
@@ -387,6 +388,110 @@ describe("bot lifecycle shims (POST /api/v1/bot/polls/:pollId/...)", () => {
     expect(response.status).toBe(200); // not 503
     expect(response.body.published).toBe(true);
     expect(getGuildMemberRolesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("bot end-message-latest-ids shim (POST /api/v1/bot/tags/:id/end-message-latest-ids)", () => {
+  let app: Express;
+
+  beforeAll(async () => {
+    app = await createApp();
+  });
+
+  it("sets the ids wholesale (token only, no user header)", async () => {
+    const updateSpy = vi.spyOn(prisma.tag, "update");
+
+    const response = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send({ end_message_latest_ids: ["111", "222"] }); // no X-Discord-User-Id
+
+    expect(response.status).toBe(200);
+    expect(response.body.tag).toBe(1);
+    expect(response.body.end_message_latest_ids).toEqual(["111", "222"]);
+    // set semantics: tag.update receives the coerced bigints wholesale
+    expect(updateSpy).toHaveBeenCalledWith({
+      where: { tag: 1 },
+      data: { end_message_latest_ids: [111n, 222n] },
+    });
+    expect(tagById(1).end_message_latest_ids).toEqual([111n, 222n]);
+    updateSpy.mockRestore();
+  });
+
+  it("re-setting the same ids does not append", async () => {
+    const updateSpy = vi.spyOn(prisma.tag, "update");
+
+    const body = { end_message_latest_ids: ["111", "222"] };
+    const first = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send(body);
+    const second = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send(body);
+
+    expect(second.status).toBe(200);
+    expect(second.body).toEqual(first.body);
+    expect(updateSpy).toHaveBeenCalledTimes(2);
+    expect(updateSpy).toHaveBeenNthCalledWith(2, {
+      where: { tag: 1 },
+      data: { end_message_latest_ids: [111n, 222n] },
+    });
+    expect(tagById(1).end_message_latest_ids).toEqual([111n, 222n]);
+    updateSpy.mockRestore();
+  });
+
+  it("requires the service token (401 without or invalid)", async () => {
+    const noToken = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .send({ end_message_latest_ids: [] });
+    expect(noToken.status).toBe(401);
+
+    const badToken = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", "Bearer wrong-token")
+      .send({ end_message_latest_ids: [] });
+    expect(badToken.status).toBe(401);
+  });
+
+  it("needs no user header: a failing Discord lookup does not block", async () => {
+    getGuildMemberRolesMock.mockReset();
+    getGuildMemberRolesMock.mockRejectedValue(new Error("Discord down"));
+
+    const response = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`) // no X-Discord-User-Id
+      .send({ end_message_latest_ids: ["111"] });
+
+    expect(response.status).toBe(200); // not 503/403
+    expect(response.body.end_message_latest_ids).toEqual(["111"]);
+    expect(getGuildMemberRolesMock).not.toHaveBeenCalled();
+  });
+
+  it("unknown tag -> 404", async () => {
+    const response = await request(app)
+      .post("/api/v1/bot/tags/999/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send({ end_message_latest_ids: ["111"] });
+    expect(response.status).toBe(404);
+    expect(response.body.message).toBe("Tag with id 999 not found");
+  });
+
+  it("invalid body -> 400 (unknown key, non-array ids)", async () => {
+    const unknownKey = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send({ end_message_latest_ids: ["111"], bogus: true });
+    expect(unknownKey.status).toBe(400);
+    expect(unknownKey.body.message).toBe("Invalid end-message-latest-ids body");
+
+    const nonArray = await request(app)
+      .post("/api/v1/bot/tags/1/end-message-latest-ids")
+      .set("Authorization", `Bearer ${TOKEN}`)
+      .send({ end_message_latest_ids: "111" });
+    expect(nonArray.status).toBe(400);
+    expect(nonArray.body.message).toBe("Invalid end-message-latest-ids body");
   });
 });
 

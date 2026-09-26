@@ -368,7 +368,7 @@ async function handleRandomOrderedQuery({
     Prisma.sql`
       SELECT id FROM polls
       WHERE guild_id = ${guildId}
-      ${published ? Prisma.sql`AND published = ${published}` : Prisma.empty}
+      ${published !== undefined ? Prisma.sql`AND published = ${published}` : Prisma.empty}
       ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
       ${
         searchQuery

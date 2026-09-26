@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { z } from "zod";
 
-import { ApiError } from "@/errors";
+import { ApiError, BadRequestError } from "@/errors";
 import { requireDiscordRevalidation } from "@/middleware/requireDiscordRevalidation";
 import {
+	BigIntFilter,
 	parseTagFilterParams,
 	parseTagId,
 	parseUpdateTagBody,
@@ -43,3 +45,31 @@ botTagRouter.post("/update", requireDiscordRevalidation, async (req, res) => {
 	const updatedTag = await updateTag(tag, fields);
 	res.status(200).json(updatedTag);
 });
+
+// End-message bookkeeping shim: the bot's scheduled starts record the
+// end-message ids with NO acting Discord user, so unlike /create and
+// /update it mounts NO revalidation — trusted beneath the tree-wide
+// service-token gate, mirroring the poll lifecycle shims.
+const EndMessageLatestIdsBody = z
+	.object({
+		end_message_latest_ids: z.array(BigIntFilter),
+	})
+	.strict();
+
+botTagRouter.post(
+	"/:id/end-message-latest-ids",
+	async (req, res) => {
+		const tagId = await parseTagId(req.params);
+		const parsed = EndMessageLatestIdsBody.safeParse(req.body);
+		if (!parsed.success) {
+			throw new BadRequestError(
+				"Invalid end-message-latest-ids body",
+				parsed.error.issues,
+			);
+		}
+		const updatedTag = await updateTag(tagId, {
+			end_message_latest_ids: parsed.data.end_message_latest_ids,
+		});
+		res.status(200).json(updatedTag);
+	},
+);
