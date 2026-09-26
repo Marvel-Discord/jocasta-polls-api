@@ -166,6 +166,33 @@ describe("bot poll reads", () => {
     });
   });
 
+  it("sync without a published param returns both published and unpublished polls", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5]);
+  });
+
+  it("sync with published=false returns only the unpublished P3", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&published=false`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+  });
+
+  it("sync with published=true returns only the published polls", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&published=true`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([4, 2, 1, 5]);
+  });
+
   it("start-timer composition (published=false&has_start=true) returns the scheduled poll only", async () => {
     const response = await request(app)
       .get(`/api/v1/bot/polls?guildId=${GUILD}&published=false&has_start=true`)

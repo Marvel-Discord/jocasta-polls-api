@@ -114,6 +114,7 @@ botPollRouter.get("/sync", async (req, res) => {
   );
   const { data, meta } = await getPolls({
     guildId,
+    published: params.published,
     ...pollFilterOptions(params),
     managementOverride: true,
   });
