@@ -10,7 +10,11 @@ BEGIN
   IF (SELECT count(*) FROM pg_catalog.pg_views WHERE schemaname = 'public') <> 0 THEN
     problems := array_append(problems, 'unexpected views in public schema');
   END IF;
-  IF (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public') <> 0 THEN
+  -- commuted_regexp_match (and its ~! operator, which lives in pg_operator and is
+  -- not counted here) are created at runtime by the legacy bot cog (funcs/postgresql.py)
+  -- until 2e removes it. They never exist in a migration-built database unless the bot
+  -- has connected; tolerated so verification can re-run against a bot-touched dev DB.
+  IF (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public' AND p.proname <> 'commuted_regexp_match') <> 0 THEN
     problems := array_append(problems, 'unexpected functions in public schema');
   END IF;
   IF (SELECT count(*) FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON t.tgrelid = c.oid WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) <> 0 THEN
