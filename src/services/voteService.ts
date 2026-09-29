@@ -75,9 +75,22 @@ export type CastVoteResult = {
  * returns the poll's per-choice tallies. `had_vote`/`deleted` expose the
  * delete outcome so shims can phrase their messages; the tallies are
  * ALWAYS real counts (bot contract; no hidden-voting override here).
- * New-vote ids use userId * 100000n + pollId (poll ids are 5-digit, so
- * the encoding is provably unique; replaces the collision-prone sum).
+ * New-vote ids are random safe-integer bigints with a findUnique-retry
+ * loop: Discord snowflakes (~19 digits, near the full int64 range) leave
+ * no headroom for any composite encoding — the old userId * 100000n +
+ * pollId scheme failed every real insert with ValueOutOfRange — and
+ * lookups go via (poll_id, user_id) anyway, so only uniqueness matters.
  */
+async function generateVoteId(): Promise<bigint> {
+  while (true) {
+    const id = BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+    const existing = await prisma.vote.findFirst({ where: { id } });
+    if (!existing) {
+      return id;
+    }
+  }
+}
+
 export async function castVote(
   pollId: number,
   userId: bigint,
@@ -118,7 +131,7 @@ export async function castVote(
     } else {
       await prisma.vote.create({
         data: {
-          id: userId * 100000n + BigInt(pollId),
+          id: await generateVoteId(),
           user_id: userId,
           poll_id: pollId,
           choice,

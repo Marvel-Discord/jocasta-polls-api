@@ -49,7 +49,7 @@ function votesFor(user: bigint, pollId: number): FixtureVote[] {
 }
 
 describe("castVote service", () => {
-  it("creates a vote with the userId*100000+pollId id scheme and correct tallies", async () => {
+  it("creates a vote with a unique safe-range random id and correct tallies", async () => {
     // P4: THIRD user already voted choice 0; FIXTURE_USER has no vote there.
     const result = await castVote(4, FIXTURE_USER_ID, 1);
 
@@ -60,8 +60,23 @@ describe("castVote service", () => {
 
     const rows = votesFor(FIXTURE_USER_ID, 4);
     expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(FIXTURE_USER_ID * 100000n + 4n);
+    expect(rows[0].id).toBeGreaterThan(0n);
+    expect(rows[0].id).toBeLessThanOrEqual(BigInt(Number.MAX_SAFE_INTEGER));
     expect(rows[0].choice).toBe(1);
+  });
+
+  it("supports snowflake-sized user ids without composite overflow (regression: userId*100000+pollId exceeded bigint)", async () => {
+    // The real-world failure from the dev deployment: a ~19-digit Discord
+    // user id made the old composite id ~2e23, out of range for bigint.
+    const snowflakeUser = 204778476102877187n;
+
+    const result = await castVote(4, snowflakeUser, 0);
+
+    expect(result.votes).toEqual([2, 0]);
+    const rows = votesFor(snowflakeUser, 4);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBeLessThanOrEqual(BigInt(Number.MAX_SAFE_INTEGER));
+    expect(rows[0].id).not.toBe(snowflakeUser * 100000n + 4n);
   });
 
   it("updates an existing vote in place (id preserved)", async () => {
