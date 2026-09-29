@@ -458,6 +458,7 @@ function matchVote(vote: FixtureVote, where: unknown): boolean {
     if (cond === undefined) continue;
     let ok: boolean;
     switch (key) {
+      case "id":
       case "poll_id":
       case "user_id":
         ok = vote[key] === cond;
