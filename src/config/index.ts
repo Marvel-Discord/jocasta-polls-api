@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
@@ -11,9 +12,13 @@ function requiredEnv(key: keyof NodeJS.ProcessEnv): string {
   return value;
 }
 
+/**
+ * Coerces an env string to a positive number; any invalid value
+ * (missing, non-numeric, NaN, zero, negative) falls back to the given
+ * default via `.catch` (`.default` alone would only cover undefined).
+ */
 function parsePositiveNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return z.coerce.number().positive().catch(fallback).parse(value);
 }
 
 const config = {
