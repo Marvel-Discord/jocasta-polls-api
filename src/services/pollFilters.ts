@@ -23,10 +23,11 @@ function derivedActiveWhere(now: Date): Prisma.PollWhereInput {
 
 /**
  * Builds the bot-facing aux list filters (ids, num, active, has_start,
- * has_end, live) as an array of conjuncts for AND-appending. Pure — no DB
- * access — so it can be unit tested directly and composed into the list
- * path's filters object. Each conjunct is self-contained: no fragment ever
- * writes a top-level OR into the shared filters.
+ * has_end, live, pending_render, ended_since) as an array of conjuncts
+ * for AND-appending. Pure — no DB access — so it can be unit tested
+ * directly and composed into the list path's filters object. Each
+ * conjunct is self-contained: no fragment ever writes a top-level OR
+ * into the shared filters.
  */
 export function buildPollAuxFilters(
   params: {
@@ -36,6 +37,8 @@ export function buildPollAuxFilters(
     has_start?: boolean;
     has_end?: boolean;
     live?: boolean;
+    pending_render?: boolean;
+    ended_since?: Date;
   },
   now: Date = new Date(),
 ): Prisma.PollWhereInput[] {
@@ -52,6 +55,15 @@ export function buildPollAuxFilters(
   if (params.live === true) {
     conjuncts.push({
       OR: [derivedActiveWhere(now), { tagRelation: { persistent: true } }],
+    });
+  }
+  if (params.pending_render === true) {
+    conjuncts.push({ start_time: { lte: now }, message_id: null });
+  }
+  if (params.ended_since !== undefined) {
+    conjuncts.push({
+      end_time: { lte: now, gt: params.ended_since },
+      message_id: { not: null },
     });
   }
   return conjuncts;

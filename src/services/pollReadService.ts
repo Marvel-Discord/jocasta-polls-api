@@ -19,6 +19,8 @@ interface PollFilters {
   has_start?: boolean;
   has_end?: boolean;
   live?: boolean;
+  pending_render?: boolean;
+  ended_since?: Date;
   user?: PollFilterUser;
   search?: string;
   page?: number;
@@ -156,6 +158,8 @@ export async function getPolls({
   has_start,
   has_end,
   live,
+  pending_render,
+  ended_since,
   user,
   search,
   page = 1,
@@ -182,6 +186,8 @@ export async function getPolls({
       has_start,
       has_end,
       live,
+      pending_render,
+      ended_since,
     },
     now,
   );

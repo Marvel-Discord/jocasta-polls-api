@@ -46,6 +46,8 @@ function pollFilterOptions(params: PollFilterParams) {
     has_start: params.has_start,
     has_end: params.has_end,
     live: params.live,
+    pending_render: params.pending_render,
+    ended_since: params.ended_since,
     search: params.search,
     page: params.page,
     limit: params.limit,

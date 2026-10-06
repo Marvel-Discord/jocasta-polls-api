@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
@@ -9,6 +10,15 @@ function requiredEnv(key: keyof NodeJS.ProcessEnv): string {
   }
 
   return value;
+}
+
+/**
+ * Coerces an env string to a positive number; any invalid value
+ * (missing, non-numeric, NaN, zero, negative) falls back to the given
+ * default via `.catch` (`.default` alone would only cover undefined).
+ */
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+  return z.coerce.number().positive().catch(fallback).parse(value);
 }
 
 const config = {
@@ -30,6 +40,13 @@ const config = {
     enabled:
       process.env.REDIS_ENABLED === "true" ||
       process.env.NODE_ENV === "production",
+  },
+  scheduler: {
+    intervalMs: parsePositiveNumber(process.env.SCHEDULER_INTERVAL_MS, 30_000),
+    endLookbackMs: parsePositiveNumber(
+      process.env.SCHEDULER_END_LOOKBACK_MS,
+      86_400_000,
+    ),
   },
   auth: {
     discord: {

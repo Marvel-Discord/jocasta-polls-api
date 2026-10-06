@@ -353,6 +353,18 @@ function matchNullableFilter(
   if (isRecord(cond) && hasExactKeys(cond, ["gt"]) && cond.gt instanceof Date) {
     return value !== null && value.getTime() > cond.gt.getTime();
   }
+  if (
+    isRecord(cond) &&
+    hasExactKeys(cond, ["lte", "gt"]) &&
+    cond.lte instanceof Date &&
+    cond.gt instanceof Date
+  ) {
+    return (
+      value !== null &&
+      value.getTime() <= cond.lte.getTime() &&
+      value.getTime() > cond.gt.getTime()
+    );
+  }
   return unsupported(what, cond);
 }
 
@@ -415,6 +427,19 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
       case "tag":
       case "num":
         ok = poll[key] === cond;
+        break;
+      case "message_id":
+        if (cond === null) {
+          ok = poll.message_id === null;
+        } else if (
+          isRecord(cond) &&
+          hasExactKeys(cond, ["not"]) &&
+          cond.not === null
+        ) {
+          ok = poll.message_id !== null;
+        } else {
+          return unsupported(`poll where ${key}`, cond);
+        }
         break;
       case "start_time":
       case "end_time":
