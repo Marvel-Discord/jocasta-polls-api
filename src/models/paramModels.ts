@@ -180,6 +180,10 @@ export async function parsePollFilterParams(
     limit: result.data.limit,
   };
 
+  if (result.data.pending_render === false) {
+    throw new BadRequestError("'pending_render' only accepts 'true'");
+  }
+
   if (result.data.order) {
     parsed.order = result.data.order;
 

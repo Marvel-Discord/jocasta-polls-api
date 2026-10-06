@@ -207,6 +207,12 @@ describe("parsePollFilterParams order=random conflicts", () => {
     ).rejects.toThrow();
   });
 
+  it("rejects pending_render=false (no complement exists)", async () => {
+    await expect(
+      parsePollFilterParams({ pending_render: "false" }),
+    ).rejects.toThrow("'pending_render' only accepts 'true'");
+  });
+
   it("parses ended_since into a Date", async () => {
     const parsed = await parsePollFilterParams({
       ended_since: "2024-01-01T00:00:00.000Z",

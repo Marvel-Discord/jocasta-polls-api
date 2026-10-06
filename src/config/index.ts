@@ -11,6 +11,11 @@ function requiredEnv(key: keyof NodeJS.ProcessEnv): string {
   return value;
 }
 
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 const config = {
   /**
    * In development mode, secure cookies are not used for sending the profile. This is because
@@ -32,8 +37,11 @@ const config = {
       process.env.NODE_ENV === "production",
   },
   scheduler: {
-    intervalMs: Number(process.env.SCHEDULER_INTERVAL_MS || 30_000),
-    endLookbackMs: Number(process.env.SCHEDULER_END_LOOKBACK_MS || 86_400_000),
+    intervalMs: parsePositiveNumber(process.env.SCHEDULER_INTERVAL_MS, 30_000),
+    endLookbackMs: parsePositiveNumber(
+      process.env.SCHEDULER_END_LOOKBACK_MS,
+      86_400_000,
+    ),
   },
   auth: {
     discord: {
