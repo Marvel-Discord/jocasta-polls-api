@@ -31,6 +31,10 @@ const config = {
       process.env.REDIS_ENABLED === "true" ||
       process.env.NODE_ENV === "production",
   },
+  scheduler: {
+    intervalMs: Number(process.env.SCHEDULER_INTERVAL_MS || 30_000),
+    endLookbackMs: Number(process.env.SCHEDULER_END_LOOKBACK_MS || 86_400_000),
+  },
   auth: {
     discord: {
       clientId: requiredEnv("DISCORD_CLIENT_ID"),

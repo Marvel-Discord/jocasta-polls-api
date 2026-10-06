@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { createApp } from "./app";
 import "./utils";
 import config from "./config";
+import { attachPollScheduler } from "./services/pollSchedulerService";
 import { attachBotEventsServer } from "./websocket/botEventsServer";
 
 async function startServer() {
@@ -10,9 +11,14 @@ async function startServer() {
     const app = await createApp();
     const server = createServer(app);
     attachBotEventsServer(server);
+    const detachPollScheduler = attachPollScheduler(
+      config.scheduler.intervalMs,
+      config.scheduler.endLookbackMs,
+    );
     server.listen(config.api.port, "0.0.0.0", () => {
       console.log(`⚡[server]: Server is running on port ${config.api.port}`);
     });
+    server.on("close", () => detachPollScheduler());
     console.log("Server started successfully with persistent sessions");
   } catch (error) {
     console.error("Failed to start server:", error);
