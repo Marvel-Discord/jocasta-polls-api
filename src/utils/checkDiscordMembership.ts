@@ -1,4 +1,5 @@
 import config from "@/config";
+import { DISCORD_API_BASE } from "@/services/discordService";
 import { getGuildById } from "@/services/guildService";
 import type { DiscordUserProfile } from "@/types/discordUserProfile";
 
@@ -57,7 +58,7 @@ export async function checkUserHasManagementPerms(
 
   try {
     const response = await fetch(
-      `https://discord.com/api/v10/users/@me/guilds/${guildId}/member`,
+      new URL(`users/@me/guilds/${guildId}/member`, DISCORD_API_BASE),
       {
         headers: {
           Authorization: `Bearer ${user.accessToken}`,
@@ -97,7 +98,7 @@ export async function checkUserInServer(
 
   try {
     const response = await fetch(
-      `https://discord.com/api/v10/users/@me/guilds/${guildId}/member`,
+      new URL(`users/@me/guilds/${guildId}/member`, DISCORD_API_BASE),
       {
         headers: {
           Authorization: `Bearer ${user.accessToken}`,
