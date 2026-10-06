@@ -4,7 +4,7 @@ import type { Express } from "express";
 
 import { createApp } from "@/app";
 import { prisma } from "@/client";
-import { FIXTURE_GUILD_ID, FIXTURE_USER_ID } from "./fixtures";
+import { FIXTURE_GUILD_ID, FIXTURE_POLLS, FIXTURE_USER_ID } from "./fixtures";
 
 let app: Express;
 const TOKEN = process.env.BOT_SERVICE_TOKEN!;
@@ -291,5 +291,36 @@ describe("bot poll reads", () => {
     // yields [4, 2, 1, 5], so the composed result is exactly [1].
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([1]);
     expect(response.body.meta.total).toBe(1);
+  });
+
+  it("pending_render=true returns started-but-unrendered polls only", async () => {
+    // Pin P3 into the past for this test (fixture start is the far-future
+    // 2030-06-01 constant); restore afterwards.
+    const p3 = FIXTURE_POLLS.find((p) => p.id === 3)!;
+    const originalStart = p3.start_time;
+    p3.start_time = new Date("2026-01-01T00:00:00.000Z");
+    try {
+      const response = await request(app)
+        .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&pending_render=true`)
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+    } finally {
+      p3.start_time = originalStart;
+    }
+  });
+
+  it("ended_since returns rendered polls ended after the watermark", async () => {
+    const response = await request(app)
+      .get(
+        `/api/v1/bot/polls/sync?guildId=${GUILD}&ended_since=2024-01-01T00:00:00.000Z`,
+      )
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    // P5 ended 2024-05-01 (rendered). P4's end is still future; P1/P2/P3
+    // have no end_time.
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([5]);
   });
 });

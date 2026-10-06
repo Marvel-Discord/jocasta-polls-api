@@ -134,6 +134,22 @@ describe("buildPollAuxFilters", () => {
     buildPollAuxFilters(params, NOW);
     expect(params).toEqual({ ids: [9], num: 1, active: false, has_end: true });
   });
+
+  it("pending_render=true → started-but-unrendered conjunct", () => {
+    expect(buildPollAuxFilters({ pending_render: true }, NOW)).toEqual([
+      { start_time: { lte: NOW }, message_id: null },
+    ]);
+  });
+
+  it("ended_since → rendered, ended-in-window conjunct", () => {
+    const since = new Date("2024-01-01T00:00:00.000Z");
+    expect(buildPollAuxFilters({ ended_since: since }, NOW)).toEqual([
+      {
+        end_time: { lte: NOW, gt: since },
+        message_id: { not: null },
+      },
+    ]);
+  });
 });
 
 describe("parsePollFilterParams order=random conflicts", () => {
@@ -155,7 +171,7 @@ describe("parsePollFilterParams order=random conflicts", () => {
 
     await expect(promise).rejects.toBeInstanceOf(BadRequestError);
     await expect(promise).rejects.toThrow(
-      "'num', 'active', 'live', 'has_start', and 'has_end' are not supported with order=random"
+      "'num', 'active', 'live', 'has_start', 'has_end', 'pending_render', and 'ended_since' are not supported with order=random"
     );
   });
 
@@ -172,6 +188,30 @@ describe("parsePollFilterParams order=random conflicts", () => {
     expect(parsed.has_start).toBeUndefined();
     expect(parsed.has_end).toBeUndefined();
     expect(parsed.live).toBeUndefined();
+  });
+
+  it("rejects pending_render/ended_since with order=random", async () => {
+    await expect(
+      parsePollFilterParams({ order: "random", pending_render: "true" }),
+    ).rejects.toThrow(
+      "'num', 'active', 'live', 'has_start', 'has_end', 'pending_render', and 'ended_since'",
+    );
+    await expect(
+      parsePollFilterParams({ order: "random", ended_since: "2024-01-01" }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a non-date ended_since", async () => {
+    await expect(
+      parsePollFilterParams({ ended_since: "not a date" }),
+    ).rejects.toThrow();
+  });
+
+  it("parses ended_since into a Date", async () => {
+    const parsed = await parsePollFilterParams({
+      ended_since: "2024-01-01T00:00:00.000Z",
+    });
+    expect(parsed.ended_since).toEqual(new Date("2024-01-01T00:00:00.000Z"));
   });
 });
 

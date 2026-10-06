@@ -13,6 +13,14 @@ const BooleanFilter = z
   .transform((val) => (val ? val === "true" : undefined))
   .optional();
 
+const IsoDateFilter = z
+  .string()
+  .refine((val) => !Number.isNaN(Date.parse(val)), {
+    message: "Must be an ISO 8601 date string",
+  })
+  .transform((val) => new Date(val))
+  .optional();
+
 const IntFilter = z.coerce.number().int().positive();
 
 export const BigIntFilter = z.coerce.bigint().positive();
@@ -70,6 +78,8 @@ const PollFilterParamsModel = z
     has_start: BooleanFilter.optional(),
     has_end: BooleanFilter.optional(),
     live: BooleanFilter.optional(),
+    pending_render: BooleanFilter.optional(),
+    ended_since: IsoDateFilter,
     ...PaginationModel.shape,
   })
   .refine((data) => !(data.notVoted && !data.userId), {
@@ -123,6 +133,8 @@ export interface PollFilterParams {
   has_start?: boolean;
   has_end?: boolean;
   live?: boolean;
+  pending_render?: boolean;
+  ended_since?: Date;
 
   page?: number;
   limit?: number;
@@ -162,6 +174,8 @@ export async function parsePollFilterParams(
     has_start: result.data.has_start,
     has_end: result.data.has_end,
     live: result.data.live,
+    pending_render: result.data.pending_render,
+    ended_since: result.data.ended_since,
     page: result.data.page,
     limit: result.data.limit,
   };
@@ -176,10 +190,12 @@ export async function parsePollFilterParams(
         result.data.active !== undefined ||
         result.data.has_start !== undefined ||
         result.data.has_end !== undefined ||
-        result.data.live !== undefined
+        result.data.live !== undefined ||
+        result.data.pending_render !== undefined ||
+        result.data.ended_since !== undefined
       ) {
         throw new BadRequestError(
-          "'num', 'active', 'live', 'has_start', and 'has_end' are not supported with order=random"
+          "'num', 'active', 'live', 'has_start', 'has_end', 'pending_render', and 'ended_since' are not supported with order=random"
         );
       }
       if (result.data.seed !== undefined) {
