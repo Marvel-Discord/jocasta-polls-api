@@ -1,6 +1,9 @@
 import config from "@/config";
 import { ApiError } from "@/errors";
 
+// trailing slash is load-bearing — new URL(path, base) drops the base's last path segment without it
+export const DISCORD_API_BASE = "https://discord.com/api/v10/";
+
 interface DiscordChannel {
   id: string;
   name: string;
@@ -207,7 +210,7 @@ export async function fetchGuildChannels(
   try {
     // Fetch channels
     const channelsResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/channels`,
+      new URL(`guilds/${guildId}/channels`, DISCORD_API_BASE),
       {
         method: "GET",
         headers: {
@@ -231,7 +234,7 @@ export async function fetchGuildChannels(
     }
 
     // Fetch bot's guild member information
-    const botResponse = await fetch(`https://discord.com/api/v10/users/@me`, {
+    const botResponse = await fetch(new URL("users/@me", DISCORD_API_BASE), {
       method: "GET",
       headers: {
         Authorization: `Bot ${config.auth.discord.botToken}`,
@@ -248,7 +251,7 @@ export async function fetchGuildChannels(
 
     // Fetch bot's member information in the guild
     const memberResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${botId}`,
+      new URL(`guilds/${guildId}/members/${botId}`, DISCORD_API_BASE),
       {
         method: "GET",
         headers: {
@@ -264,7 +267,7 @@ export async function fetchGuildChannels(
 
     // Fetch guild roles to check role-based permissions
     const rolesResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/roles`,
+      new URL(`guilds/${guildId}/roles`, DISCORD_API_BASE),
       {
         method: "GET",
         headers: {
@@ -314,7 +317,7 @@ export async function getGuildMemberRoles(
   userId: bigint
 ): Promise<bigint[]> {
   const response = await fetch(
-    `https://discord.com/api/v10/guilds/${guildId}/members/${userId}`,
+    new URL(`guilds/${guildId}/members/${userId}`, DISCORD_API_BASE),
     {
       method: "GET",
       headers: {
@@ -352,7 +355,7 @@ export async function fetchGuildRoles(
 
   try {
     const response = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/roles`,
+      new URL(`guilds/${guildId}/roles`, DISCORD_API_BASE),
       {
         method: "GET",
         headers: {
