@@ -1,7 +1,19 @@
 import { getBotContext } from "@/context/botContext";
 
 export type BotEventTable = "polls" | "votes" | "tags";
-export type BotEventOperation = "create" | "update" | "delete";
+/**
+ * `start` and `end` are synthetic lifecycle operations emitted by the
+ * poll scheduler sweep (no DB write backs them): start re-emits for
+ * polls whose start_time has passed but which have no message_id yet
+ * (self-healing until the bot reports its render), end re-emits for
+ * rendered polls inside the sweep's lookback window.
+ */
+export type BotEventOperation =
+  | "create"
+  | "update"
+  | "delete"
+  | "start"
+  | "end";
 
 export interface BotEventFrame {
   table: BotEventTable;
