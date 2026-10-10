@@ -29,9 +29,9 @@ export interface PublishMessage {
 
 /**
  * Publishes a poll: atomically increments the tag's current_num and
- * stamps the Discord message state. Already-published polls return
- * their current state untouched (idempotent — no increment, no field
- * changes).
+ * stamps the Discord message state. Already-rendered polls (message_id
+ * set) return their current state untouched (idempotent — no
+ * increment, no field changes).
  *
  * Increment implementation choice: the typed `tag.update` with
  * `current_num: { increment: 1 }` is a single atomic UPDATE that
@@ -47,7 +47,9 @@ export async function publishPoll(
   if (!poll) {
     throw new NotFoundError(`Poll with id ${pollId} not found`);
   }
-  if (poll.published) {
+  if (poll.message_id !== null) {
+    // Already rendered — idempotent no-op (message_id is the render
+    // marker now that published is derived).
     return serializePoll(poll);
   }
   if (poll.tag === null) {
@@ -64,7 +66,6 @@ export async function publishPoll(
   const updated = await prisma.poll.update({
     where: { id: pollId },
     data: {
-      published: true,
       num: tag.current_num,
       message_id: message.message_id,
       crosspost_message_ids: message.crosspost_message_ids,

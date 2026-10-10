@@ -50,7 +50,10 @@ import {
 const TOKEN = process.env.BOT_SERVICE_TOKEN!;
 const USER = FIXTURE_USER_ID.toString();
 
-const P3_START = new Date("2030-06-01T12:00:00.000Z"); // fixture poll 3's start
+// A pinned-past start for fixture poll 3 (whose fixture start is the
+// far-future 2030 constant), for tests that assert derived
+// published=true (published means started).
+const P3_PAST_START = new Date("2024-01-01T00:00:00.000Z");
 
 const MESSAGE_ID = 900000000000000001n;
 const CROSSPOST_IDS = [910000000000000001n, 910000000000000002n];
@@ -90,18 +93,19 @@ function pollById(id: number): FixturePoll {
 
 describe("publishPoll", () => {
   it("increments the tag counter atomically and stamps all publish fields", async () => {
+    // Pin P3's start into the past: derived published is true (started).
+    pollById(3).start_time = P3_PAST_START;
     const poll = await publishPoll(3, {
       message_id: MESSAGE_ID,
       crosspost_message_ids: CROSSPOST_IDS,
     });
 
-    expect(poll.published).toBe(true);
+    expect(poll.published).toBe(true); // computed: start_time has passed
     expect(poll.num).toBe(2); // tag 2's current_num: 1 -> 2
     expect(poll.message_id).toBe(MESSAGE_ID);
     expect(poll.crosspost_message_ids).toEqual(CROSSPOST_IDS);
-    expect(poll.start_time).toEqual(P3_START); // existing start preserved
+    expect(poll.start_time).toEqual(P3_PAST_START); // existing start preserved
     expect(tagById(2).current_num).toBe(2);
-    expect(pollById(3).published).toBe(true);
   });
 
   it("stamps start_time when the poll has none", async () => {
@@ -120,9 +124,14 @@ describe("publishPoll", () => {
       crosspost_message_ids: [],
     });
     expect(published.start_time).not.toBeNull();
+    // The `?? new Date()` fallback stamps the start, so the derived
+    // published flag flips true in the response.
+    expect(published.published).toBe(true);
   });
 
   it("returns the full serialized contract (derived active included)", async () => {
+    // Pin P3's start into the past: derived published/active are true.
+    pollById(3).start_time = P3_PAST_START;
     const poll = await publishPoll(3, {
       message_id: MESSAGE_ID,
       crosspost_message_ids: CROSSPOST_IDS,
@@ -131,14 +140,13 @@ describe("publishPoll", () => {
     expect(poll).toEqual({
       id: 3,
       question: "P3 unpublished scheduled",
-      published: true,
-      // start is the far-future fixture constant -> derived inactive
-      active: false,
+      published: true, // computed: start_time has passed
+      active: true, // started, open-ended (end null)
       guild_id: FIXTURE_GUILD_ID,
       choices: ["P3 choice 0", "P3 choice 1"],
       votes: [0, 0],
       total_votes: 0,
-      start_time: P3_START,
+      start_time: P3_PAST_START,
       end_time: null,
       num: 2,
       message_id: MESSAGE_ID,
@@ -253,6 +261,8 @@ describe("bot lifecycle shims (POST /api/v1/bot/polls/:pollId/...)", () => {
   });
 
   it("publish: 200 with the serialized poll (token only, no user header)", async () => {
+    // Pin P3's start into the past so the derived published flag is true.
+    pollById(3).start_time = P3_PAST_START;
     const response = await request(app)
       .post("/api/v1/bot/polls/3/publish")
       .set("Authorization", `Bearer ${TOKEN}`)
@@ -323,6 +333,8 @@ describe("bot lifecycle shims (POST /api/v1/bot/polls/:pollId/...)", () => {
     getGuildMemberRolesMock.mockReset();
     getGuildMemberRolesMock.mockRejectedValue(new Error("Discord down"));
 
+    // Pin P3's start into the past so the derived published flag is true.
+    pollById(3).start_time = P3_PAST_START;
     const response = await request(app)
       .post("/api/v1/bot/polls/3/publish")
       .set("Authorization", `Bearer ${TOKEN}`)

@@ -340,7 +340,8 @@ describe("service write emission (real service calls end-to-end)", () => {
     expect(await nextMessage(ws)).toBe('{"table":"polls","operation":"update","id":1}');
 
     // Idempotent no-ops write nothing, so they emit nothing: P1 is
-    // already published.
+    // already rendered (message_id set — the render marker now that
+    // published is derived).
     await publishPoll(1, { message_id: 999n, crosspost_message_ids: [] });
     await expectNoFrame(ws);
   });

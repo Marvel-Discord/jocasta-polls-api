@@ -19,7 +19,6 @@ const GUILD = FIXTURE_GUILD_ID.toString();
 const NOW = new Date("2026-06-15T12:00:00.000Z");
 
 const DERIVED_ACTIVE = {
-  published: true,
   start_time: { lte: NOW },
   OR: [{ end_time: null }, { end_time: { gt: NOW } }],
 };
@@ -49,9 +48,25 @@ describe("buildPollAuxFilters", () => {
     expect(buildPollAuxFilters({ num: 7 }, NOW)).toEqual([{ num: 7 }]);
   });
 
-  it("active=true derives published+started+not-ended against the injected now", () => {
-    expect(buildPollAuxFilters({ active: true }, NOW)).toEqual([
-      DERIVED_ACTIVE,
+  it("published=true → derived conjunct (started)", () => {
+    expect(buildPollAuxFilters({ published: true }, NOW)).toEqual([
+      { start_time: { lte: NOW } },
+    ]);
+  });
+
+  it("published=false → NOT the derived conjunct (drafts + scheduled)", () => {
+    expect(buildPollAuxFilters({ published: false }, NOW)).toEqual([
+      { NOT: { start_time: { lte: NOW } } },
+    ]);
+  });
+
+  it("active conjunct no longer references published", () => {
+    const conjuncts = buildPollAuxFilters({ active: true }, NOW);
+    expect(conjuncts).toEqual([
+      {
+        start_time: { lte: NOW },
+        OR: [{ end_time: null }, { end_time: { gt: NOW } }],
+      },
     ]);
   });
 
@@ -267,8 +282,8 @@ describe("GET /api/v1/polls unpublished gate", () => {
     );
 
     expect(response.status).toBe(200);
-    // P5 (published, ended) is the only published inactive poll; the
-    // unpublished P3 also fails the derived-active conjunct but the
+    // P5 (started, ended) is the only started inactive poll; the
+    // not-yet-started P3 also fails the derived-active conjunct but the
     // route's forced published:true must exclude it.
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([5]);
     expect(

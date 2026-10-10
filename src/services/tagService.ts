@@ -18,7 +18,7 @@ export async function getTags(options: TagFilterOptions = {}): Promise<Tag[]> {
 		},
 		include: {
 			polls: {
-				where: options.publishedOnly ? { published: true } : {},
+				where: options.publishedOnly ? { start_time: { lte: new Date() } } : {},
 			orderBy: {
 				start_time: "desc",
 			},

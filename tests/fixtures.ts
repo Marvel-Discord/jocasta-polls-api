@@ -40,7 +40,6 @@ const P5_END = new Date("2024-05-01T12:00:00.000Z");
 export type FixturePoll = {
   id: number;
   question: string;
-  published: boolean;
   guild_id: bigint;
   choices: string[];
   start_time: Date | null;
@@ -105,7 +104,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 1,
     question: "P1 published visible voting",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P1 choice 0", "P1 choice 1"],
     start_time: P1_START,
@@ -125,7 +123,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 2,
     question: "P2 published hidden voting",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P2 choice 0", "P2 choice 1"],
     start_time: P2_START,
@@ -145,7 +142,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 3,
     question: "P3 unpublished scheduled",
-    published: false,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P3 choice 0", "P3 choice 1"],
     start_time: P3_START,
@@ -165,7 +161,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 4,
     question: "P4 published end scheduled",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P4 choice 0", "P4 choice 1"],
     start_time: P4_START,
@@ -185,7 +180,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 5,
     question: "P5 published ended persistent",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P5 choice 0", "P5 choice 1"],
     start_time: P5_START,
@@ -416,14 +410,13 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
   if (where === undefined) return true;
   if (!isRecord(where)) return unsupported("poll where", where);
   for (const [key, cond] of Object.entries(where)) {
-    if (cond === undefined) continue; // e.g. `published: undefined` from builders
+    if (cond === undefined) continue; // e.g. omitted filter options
     let ok: boolean;
     switch (key) {
       case "id":
         ok = matchIdFilter(poll.id, cond);
         break;
       case "guild_id":
-      case "published":
       case "tag":
       case "num":
         ok = poll[key] === cond;
@@ -577,7 +570,6 @@ async function pollCount(args: MockArgs = {}): Promise<number> {
 const POLL_FIELD_NAMES = new Set([
   "id",
   "question",
-  "published",
   "guild_id",
   "choices",
   "start_time",
@@ -804,7 +796,7 @@ async function tagFindMany(args: MockArgs = {}): Promise<Row[]> {
   const take = isRecord(pollsInclude) ? pollsInclude.take : undefined;
   const whereOk =
     isRecord(pollsWhere) &&
-    Object.keys(pollsWhere).every((key) => key === "published");
+    Object.keys(pollsWhere).every((key) => key === "start_time");
   const orderOk = isRecord(pollsOrderBy) && hasExactKeys(pollsOrderBy, ["start_time"]);
   if (
     !isRecord(pollsInclude) ||

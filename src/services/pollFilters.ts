@@ -9,29 +9,39 @@ export interface PollFilterUser {
 }
 
 /**
- * Builds the derived-active where fragment: published, started, and not
- * ended (open-ended polls count as not ended). One helper, two consumers:
+ * Builds the derived-published where fragment: started (start_time
+ * passed). NULL start_time fails the comparison, so no explicit
+ * not-null is needed (SQL semantics). One helper, two consumers: the
+ * `published` filter and derived-active.
+ */
+export function derivedPublishedWhere(now: Date): Prisma.PollWhereInput {
+  return { start_time: { lte: now } };
+}
+
+/**
+ * Builds the derived-active where fragment: started and not ended
+ * (open-ended polls count as not ended). One helper, two consumers:
  * the `active` filter and the derived arm of the `live` filter.
  */
 function derivedActiveWhere(now: Date): Prisma.PollWhereInput {
   return {
-    published: true,
     start_time: { lte: now },
     OR: [{ end_time: null }, { end_time: { gt: now } }],
   };
 }
 
 /**
- * Builds the bot-facing aux list filters (ids, num, active, has_start,
- * has_end, live, pending_render, ended_since) as an array of conjuncts
- * for AND-appending. Pure — no DB access — so it can be unit tested
- * directly and composed into the list path's filters object. Each
- * conjunct is self-contained: no fragment ever writes a top-level OR
- * into the shared filters.
+ * Builds the bot-facing aux list filters (ids, num, published, active,
+ * has_start, has_end, live, pending_render, ended_since) as an array
+ * of conjuncts for AND-appending. Pure — no DB access — so it can be
+ * unit tested directly and composed into the list path's filters
+ * object. Each conjunct is self-contained: no fragment ever writes a
+ * top-level OR into the shared filters.
  */
 export function buildPollAuxFilters(
   params: {
     ids?: number[];
+    published?: boolean;
     num?: number;
     active?: boolean;
     has_start?: boolean;
@@ -45,6 +55,9 @@ export function buildPollAuxFilters(
   const conjuncts: Prisma.PollWhereInput[] = [];
   if (params.ids?.length) conjuncts.push({ id: { in: params.ids } });
   if (params.num !== undefined) conjuncts.push({ num: params.num });
+  if (params.published === true) conjuncts.push(derivedPublishedWhere(now));
+  else if (params.published === false)
+    conjuncts.push({ NOT: derivedPublishedWhere(now) });
   if (params.active === true) conjuncts.push(derivedActiveWhere(now));
   else if (params.active === false)
     conjuncts.push({ NOT: derivedActiveWhere(now) });

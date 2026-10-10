@@ -218,7 +218,9 @@ describe("bot poll reads", () => {
         /\$(\d+)/g,
         (_, i) => `${statement.values[Number(i) - 1]}`,
       );
-      expect(interpolated).toContain("AND published = false");
+      expect(interpolated).toContain(
+        "AND NOT (start_time IS NOT NULL AND start_time <=",
+      );
     } finally {
       delete prismaWithRaw.$queryRaw;
     }

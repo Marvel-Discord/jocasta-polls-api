@@ -73,16 +73,14 @@ function createPaginationMeta(
  * Builds Prisma where conditions for poll filtering
  */
 function buildPollFilters(options: {
-  published?: boolean;
   guildId: bigint;
   tag?: number;
   user?: PollFilterUser;
   searchQuery?: string;
 }) {
-  const { published, guildId, tag, user, searchQuery } = options;
+  const { guildId, tag, user, searchQuery } = options;
 
   return {
-    published,
     guild_id: guildId,
     ...(tag !== undefined ? { tag } : {}),
     ...(user
@@ -172,7 +170,6 @@ export async function getPolls({
   const now = new Date();
   const searchQuery = search ? sanitizeSearchInput(search) : undefined;
   const filters = buildPollFilters({
-    published,
     guildId,
     tag,
     user,
@@ -182,6 +179,7 @@ export async function getPolls({
     {
       ids,
       num,
+      published,
       active,
       has_start,
       has_end,
@@ -374,7 +372,13 @@ async function handleRandomOrderedQuery({
     Prisma.sql`
       SELECT id FROM polls
       WHERE guild_id = ${guildId}
-      ${published !== undefined ? Prisma.sql`AND published = ${published}` : Prisma.empty}
+      ${
+        published !== undefined
+          ? published
+            ? Prisma.sql`AND start_time IS NOT NULL AND start_time <= ${now}`
+            : Prisma.sql`AND NOT (start_time IS NOT NULL AND start_time <= ${now})`
+          : Prisma.empty
+      }
       ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
       ${
         searchQuery

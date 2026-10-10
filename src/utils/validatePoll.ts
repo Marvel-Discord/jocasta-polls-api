@@ -1,4 +1,5 @@
 import { BadRequestError } from "@/errors";
+import { computePublished } from "@/services/pollSerializer";
 import { Poll } from "@/types";
 
 /** Timestamp accepted on poll write inputs (ISO string or Date instance). */
@@ -107,17 +108,19 @@ export function validatePoll(poll: PollWriteInput) {
 }
 
 /**
- * Post-publish immutability matrix: once published, a poll's choices
- * LENGTH, tag, and start time are frozen (omit = keep; choices CONTENT
- * and end_time stay editable in any state). The existing poll is a
- * serialized post-L3 poll, so its `start_time` is the comparison truth;
- * the incoming start time resolves through the `time` alias first.
+ * Post-publish immutability matrix: once published (derived — the poll
+ * has started), a poll's choices LENGTH, tag, and start time are
+ * frozen (omit = keep; choices CONTENT and end_time stay editable in
+ * any state). The existing poll carries `start_time` as the comparison
+ * truth (serialized polls and raw models both do — the `published`
+ * column is gone); the incoming start time resolves through the `time`
+ * alias first.
  */
 export function validatePublishedPoll(
   newPoll: PollWriteInput,
-  existingPoll: Pick<Poll, "published" | "choices" | "tag" | "start_time">,
+  existingPoll: Pick<Poll, "choices" | "tag" | "start_time">,
 ) {
-  if (!existingPoll.published) return;
+  if (!computePublished(existingPoll)) return;
 
   if (
     newPoll.choices !== undefined &&
