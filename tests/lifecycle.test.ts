@@ -1,6 +1,6 @@
 /**
- * Lifecycle coverage: publish/end/crosspost services (idempotency is
- * the design heart — no double increment, no end_time overwrite), the
+ * Lifecycle coverage: publish/crosspost services (idempotency is
+ * the design heart — no double increment), the
  * never-editable tightening on /update (num/message_id/crosspost_
  * message_ids/fallback/guild_id fail loudly naming the designated
  * endpoint), and the bot shims (system ops: service token only, NO
@@ -32,11 +32,7 @@ vi.mock("@/services/discordService", async (importOriginal) => {
 import { createApp } from "@/app";
 import { prisma } from "@/client";
 import { BadRequestError, NotFoundError } from "@/errors";
-import {
-  crosspostPoll,
-  endPoll,
-  publishPoll,
-} from "@/services/pollLifecycleService";
+import { crosspostPoll, publishPoll } from "@/services/pollLifecycleService";
 import { createPolls, updatePolls } from "@/services/pollWriteService";
 import type { PollWriteInput } from "@/utils/validatePoll";
 import {
@@ -185,37 +181,6 @@ describe("publishPoll", () => {
   });
 });
 
-describe("endPoll", () => {
-  it("sets end_time and returns the serialized poll", async () => {
-    const ended = await endPoll(1);
-
-    expect(ended.end_time).not.toBeNull();
-    expect(ended.id).toBe(1);
-    expect(ended.published).toBe(true);
-    // ended now -> derived inactive even though it was active
-    expect(ended.active).toBe(false);
-    expect(pollById(1).end_time).not.toBeNull();
-  });
-
-  it("is idempotent: a second end keeps the first end_time", async () => {
-    const first = await endPoll(1);
-    const second = await endPoll(1);
-
-    expect(second.end_time).toEqual(first.end_time);
-  });
-
-  it("is idempotent for a poll that already shipped an end_time", async () => {
-    // P5 has a fixed past end_time; ending it again must not move it
-    const ended = await endPoll(5);
-    expect(ended.end_time).toEqual(new Date("2024-05-01T12:00:00.000Z"));
-  });
-
-  it("rejects unknown polls with 404", async () => {
-    const missing = endPoll(999);
-    await expect(missing).rejects.toThrow("Poll with id 999 not found");
-  });
-});
-
 describe("crosspostPoll", () => {
   it("appends the message id", async () => {
     const posted = await crosspostPoll(1, 700n);
@@ -338,20 +303,6 @@ describe("bot lifecycle shims (POST /api/v1/bot/polls/:pollId/...)", () => {
     expect(response.body.message).toBe("Poll with id 999 not found");
   });
 
-  it("end: 200 stamping end_time; second call keeps the first", async () => {
-    const first = await request(app)
-      .post("/api/v1/bot/polls/1/end")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(first.status).toBe(200);
-    expect(first.body.end_time).not.toBeNull();
-
-    const second = await request(app)
-      .post("/api/v1/bot/polls/1/end")
-      .set("Authorization", `Bearer ${TOKEN}`);
-    expect(second.status).toBe(200);
-    expect(second.body.end_time).toBe(first.body.end_time);
-  });
-
   it("crosspost: 200 appending the message id; duplicate -> 400", async () => {
     const response = await request(app)
       .post("/api/v1/bot/polls/1/crosspost")
@@ -366,13 +317,6 @@ describe("bot lifecycle shims (POST /api/v1/bot/polls/:pollId/...)", () => {
       .send({ message_id: "700" });
     expect(dup.status).toBe(400);
     expect(dup.body.message).toBe("Message already crossposted to this poll");
-  });
-
-  it("requires the service token (401 without it)", async () => {
-    const response = await request(app)
-      .post("/api/v1/bot/polls/1/end")
-      .set("X-Discord-User-Id", USER); // no Authorization header
-    expect(response.status).toBe(401);
   });
 
   it("mounts no revalidation: a failing Discord lookup does not block", async () => {

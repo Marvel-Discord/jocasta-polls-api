@@ -22,7 +22,7 @@ import type { RawData, WebSocket as WsClient } from "ws";
 
 import { createApp } from "@/app";
 import { runBotContext } from "@/context/botContext";
-import { crosspostPoll, endPoll, publishPoll } from "@/services/pollLifecycleService";
+import { crosspostPoll, publishPoll } from "@/services/pollLifecycleService";
 import {
   createPolls,
   deletePolls,
@@ -336,18 +336,12 @@ describe("service write emission (real service calls end-to-end)", () => {
     await publishPoll(3, { message_id: 777n, crosspost_message_ids: [] });
     expect(await nextMessage(ws)).toBe('{"table":"polls","operation":"update","id":3}');
 
-    // P2 has a null end_time, so endPoll takes its write path (P4/P5
-    // ship a set end_time and would return early without writing).
-    await endPoll(2);
-    expect(await nextMessage(ws)).toBe('{"table":"polls","operation":"update","id":2}');
-
     await crosspostPoll(1, 888n);
     expect(await nextMessage(ws)).toBe('{"table":"polls","operation":"update","id":1}');
 
     // Idempotent no-ops write nothing, so they emit nothing: P1 is
-    // already published, P5 already ended.
+    // already published.
     await publishPoll(1, { message_id: 999n, crosspost_message_ids: [] });
-    await endPoll(5);
     await expectNoFrame(ws);
   });
 

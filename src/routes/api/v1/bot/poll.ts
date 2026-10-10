@@ -21,7 +21,6 @@ import {
 } from "@/models/paramModels";
 import {
   crosspostPoll,
-  endPoll,
   publishPoll,
 } from "@/services/pollLifecycleService";
 import { getPollById, getPolls } from "@/services/pollReadService";
@@ -225,11 +224,6 @@ botPollRouter.post("/:pollId/publish", async (req, res) => {
     req.body as PublishBody,
   );
   const poll = await publishPoll(pollId, { message_id, crosspost_message_ids });
-  res.status(200).json(poll);
-});
-botPollRouter.post("/:pollId/end", async (req, res) => {
-  const pollId = await parsePollId(req.params as PollIdParams);
-  const poll = await endPoll(pollId);
   res.status(200).json(poll);
 });
 botPollRouter.post("/:pollId/crosspost", async (req, res) => {

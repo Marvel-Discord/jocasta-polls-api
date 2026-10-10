@@ -8,11 +8,11 @@ import type { Poll } from "@/types";
 import { emitBotEvent } from "@/websocket/botEventEmitter";
 
 /**
- * Lifecycle transitions (publish/end/crosspost): the designated writers
+ * Lifecycle transitions (publish/crosspost): the designated writers
  * for num, message_id, crosspost_message_ids, and start_time stamping.
- * All three are idempotent where the locked semantics demand it — a
- * second publish must NOT double-increment the tag counter, a second
- * end must NOT move end_time — and each returns the serialized poll.
+ * Both are idempotent where the locked semantics demand it — a second
+ * publish must NOT double-increment the tag counter — and each returns
+ * the serialized poll.
  */
 
 async function getPollWithVotes(pollId: number) {
@@ -74,29 +74,6 @@ export async function publishPoll(
   });
   emitBotEvent("polls", "update", pollId);
   console.log(`Published poll ${pollId} as num ${tag.current_num}`);
-  return serializePoll(updated);
-}
-
-/**
- * Ends a poll: stamps end_time with now. An already-set end_time
- * returns the current state (idempotent — the first end time wins).
- */
-export async function endPoll(pollId: number): Promise<Poll> {
-  const poll = await getPollWithVotes(pollId);
-  if (!poll) {
-    throw new NotFoundError(`Poll with id ${pollId} not found`);
-  }
-  if (poll.end_time !== null) {
-    return serializePoll(poll);
-  }
-
-  const updated = await prisma.poll.update({
-    where: { id: pollId },
-    data: { end_time: new Date() },
-    include: POLL_WITH_VOTES_INCLUDE,
-  });
-  emitBotEvent("polls", "update", pollId);
-  console.log(`Ended poll ${pollId}`);
   return serializePoll(updated);
 }
 
