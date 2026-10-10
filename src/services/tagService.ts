@@ -20,7 +20,10 @@ export async function getTags(options: TagFilterOptions = {}): Promise<Tag[]> {
 			polls: {
 				where: options.publishedOnly ? { start_time: { lte: new Date() } } : {},
 			orderBy: {
-				start_time: "desc",
+				// explicit nulls ordering: a draft (NULL start_time) must not
+				// outrank a scheduled poll as the tag's "latest" — Postgres
+				// DESC defaults to NULLS FIRST
+				start_time: { sort: "desc", nulls: "last" },
 			},
 				take: 1,
 			},

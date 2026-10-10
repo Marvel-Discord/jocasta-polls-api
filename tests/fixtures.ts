@@ -825,16 +825,31 @@ async function tagFindMany(args: MockArgs = {}): Promise<Row[]> {
   const whereOk =
     isRecord(pollsWhere) &&
     Object.keys(pollsWhere).every((key) => key === "start_time");
-  const orderOk = isRecord(pollsOrderBy) && hasExactKeys(pollsOrderBy, ["start_time"]);
+  // Accept both orderBy forms Prisma allows for the embedded polls:
+  // { start_time: "desc" } and { start_time: { sort, nulls } }. The
+  // nulls option must agree with toMillis' NULL→0 mapping (nulls-last
+  // in desc) or the mock would certify wrong ordering.
+  const orderValue = isRecord(pollsOrderBy) ? pollsOrderBy.start_time : undefined;
+  const orderOk =
+    isRecord(pollsOrderBy) && hasExactKeys(pollsOrderBy, ["start_time"]);
+  let dir: "asc" | "desc";
+  if (orderOk && isRecord(orderValue) && hasExactKeys(orderValue, ["sort", "nulls"])) {
+    if (orderValue.nulls !== "last") {
+      return unsupported("tag.findMany include polls orderBy nulls", orderValue);
+    }
+    dir = dirOf(orderValue.sort);
+  } else if (orderOk) {
+    dir = dirOf(orderValue);
+  } else {
+    return unsupported("tag.findMany include", include);
+  }
   if (
     !isRecord(pollsInclude) ||
     !whereOk ||
-    !orderOk ||
     (take !== undefined && typeof take !== "number")
   ) {
     return unsupported("tag.findMany include", include);
   }
-  const dir = dirOf(pollsOrderBy.start_time);
   return rows.map((tag) => {
     const polls = FIXTURE_POLLS.filter(
       (poll) => poll.tag === tag.tag && matchPoll(poll, pollsWhere),
