@@ -44,9 +44,8 @@ export function computeActive(
 
 /**
  * Serializes a poll with its vote relation into the API contract shape:
- * tallies votes per choice, emits start_time/end_time, derives `active`
- * from the timestamps (the model no longer stores it), and keeps time as
- * the compatibility alias for start_time (website; removable post-migration)
+ * tallies votes per choice, emits start_time/end_time, and derives
+ * `active` from the timestamps (the model no longer stores it).
  */
 export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll {
   const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
@@ -64,6 +63,5 @@ export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll
     total_votes: totalVotes,
     start_time,
     end_time,
-    time: start_time,
   };
 }

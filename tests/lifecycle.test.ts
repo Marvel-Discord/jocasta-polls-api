@@ -142,7 +142,6 @@ describe("publishPoll", () => {
       choices: ["P3 choice 0", "P3 choice 1"],
       votes: [0, 0],
       total_votes: 0,
-      time: P3_START, // compatibility alias
       start_time: P3_START,
       end_time: null,
       num: 2,
