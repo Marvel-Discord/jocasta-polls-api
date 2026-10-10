@@ -56,17 +56,23 @@ const CONTRACT_KEYS = [
   "total_votes",
   "start_time",
   "end_time",
-  "time",
 ].sort();
 
 describe("serializePoll", () => {
-  it("emits start_time, end_time, and the time compatibility alias", () => {
+  it("emits start_time and end_time", () => {
     const poll = makePoll({ votes: [{ choice: 0 }] });
     const result = serializePoll(poll);
 
     expect(result.start_time).toBe(poll.start_time);
     expect(result.end_time).toBe(poll.end_time);
-    expect(result.time).toBe(result.start_time);
+  });
+
+  it("no longer serializes the time alias", () => {
+    const poll = makePoll({ votes: [{ choice: 0 }] });
+    const result = serializePoll(poll);
+
+    expect(result).not.toHaveProperty("time");
+    expect(result.start_time).toEqual(poll.start_time);
   });
 
   it("tallies votes per choice and total_votes from the relation", () => {
@@ -109,7 +115,6 @@ describe("serializePoll", () => {
 
     expect(result.start_time).toBeNull();
     expect(result.end_time).toBeNull();
-    expect(result.time).toBeNull();
     expect(Object.keys(result).sort()).toEqual(CONTRACT_KEYS);
     expect(result).not.toHaveProperty("tagRelation");
     expect(result.votes).toEqual([0, 0, 1]);

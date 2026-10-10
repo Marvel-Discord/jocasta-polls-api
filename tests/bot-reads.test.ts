@@ -18,7 +18,6 @@ function assertContractShape(poll: any) {
   for (const field of [
     "start_time",
     "end_time",
-    "time",
     "votes",
     "total_votes",
     "active",
@@ -28,7 +27,7 @@ function assertContractShape(poll: any) {
   expect(Array.isArray(poll.votes)).toBe(true);
   expect(typeof poll.total_votes).toBe("number");
   expect(typeof poll.active).toBe("boolean");
-  expect(poll.time).toBe(poll.start_time);
+  expect(poll).not.toHaveProperty("time");
   expect(poll).not.toHaveProperty("tagRelation");
 }
 

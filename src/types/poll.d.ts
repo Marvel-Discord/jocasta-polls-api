@@ -7,8 +7,6 @@ export interface Poll {
   choices: string[];
   votes: number[] | null;
   total_votes: number;
-  /** Compatibility alias for start_time (website); removable once the website reads start_time. */
-  time: Date | null;
   start_time: Date | null;
   end_time: Date | null;
   // duration: string | null;
