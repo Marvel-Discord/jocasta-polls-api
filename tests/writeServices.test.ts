@@ -359,8 +359,8 @@ describe("updatePollsByTag", () => {
   });
 
   it("mixed batch: matrix rejects per-poll and the whole batch is atomic", async () => {
-    // tag 2 = P3 (unpublished) + P4 (published): moving start_time is
-    // frozen on P4, so nothing may be written.
+    // tag 2 = P3 (unpublished) + P4 (published) + P6 (draft): moving
+    // start_time is frozen on P4, so nothing may be written.
     const rejected = updatePollsByTag(2, { start_time: NEW_TIME });
     await expect(rejected).rejects.toThrow(
       "Cannot change the time of a published poll",
@@ -371,6 +371,7 @@ describe("updatePollsByTag", () => {
     expect(pollById(4).start_time).toEqual(
       new Date("2024-03-15T12:00:00.000Z"),
     );
+    expect(pollById(6).start_time).toBeNull();
   });
 
   it("unknown tags update nothing and return an empty batch", async () => {
@@ -560,8 +561,9 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
       .send({ tag: 2, question: "renamed" });
     expect(response.status).toBe(200);
     expect(response.body.message).toBe("Polls updated successfully");
+    // tag 2 polls in fixture order: P3, P4, and the draft P6.
     expect(response.body.polls.map((poll: { id: number }) => poll.id)).toEqual(
-      [3, 4],
+      [3, 4, 6],
     );
     expect(response.body.polls.every(
       (poll: { question: string }) => poll.question === "renamed",

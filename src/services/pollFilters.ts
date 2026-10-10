@@ -31,6 +31,35 @@ function derivedActiveWhere(now: Date): Prisma.PollWhereInput {
 }
 
 /**
+ * Builds the derived-unpublished where fragment: drafts (NULL
+ * start_time) OR scheduled (start_time still in the future). Written
+ * as an explicit OR instead of NOT derivedPublishedWhere because SQL
+ * three-valued logic would drop drafts (NULL <= now is NULL, NOT NULL
+ * is NULL, NULL excludes the row).
+ */
+export function derivedUnpublishedWhere(now: Date): Prisma.PollWhereInput {
+  return { OR: [{ start_time: null }, { start_time: { gt: now } }] };
+}
+
+/**
+ * Builds the derived-inactive where fragment: not started (draft or
+ * scheduled) OR ended. Written as an explicit OR instead of NOT
+ * derivedActiveWhere because SQL three-valued logic would drop drafts
+ * (a NULL start_time makes the NOT evaluate to NULL and exclude the
+ * row). The end_time arm is NULL-safe on its own: an open-ended
+ * started poll yields NULL there and correctly stays active.
+ */
+function derivedInactiveWhere(now: Date): Prisma.PollWhereInput {
+  return {
+    OR: [
+      { start_time: null },
+      { start_time: { gt: now } },
+      { end_time: { lte: now } },
+    ],
+  };
+}
+
+/**
  * Builds the bot-facing aux list filters (ids, num, published, active,
  * has_start, has_end, live, pending_render, ended_since) as an array
  * of conjuncts for AND-appending. Pure — no DB access — so it can be
@@ -57,10 +86,10 @@ export function buildPollAuxFilters(
   if (params.num !== undefined) conjuncts.push({ num: params.num });
   if (params.published === true) conjuncts.push(derivedPublishedWhere(now));
   else if (params.published === false)
-    conjuncts.push({ NOT: derivedPublishedWhere(now) });
+    conjuncts.push(derivedUnpublishedWhere(now));
   if (params.active === true) conjuncts.push(derivedActiveWhere(now));
   else if (params.active === false)
-    conjuncts.push({ NOT: derivedActiveWhere(now) });
+    conjuncts.push(derivedInactiveWhere(now));
   if (params.has_start === true) conjuncts.push({ start_time: { not: null } });
   else if (params.has_start === false) conjuncts.push({ start_time: null });
   if (params.has_end === true) conjuncts.push({ end_time: { not: null } });

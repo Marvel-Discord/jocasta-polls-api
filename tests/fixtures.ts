@@ -99,6 +99,10 @@ export type FixtureGuildSettings = {
 // P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
 // P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
 // P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
+// P6: draft — start_time NULL (never scheduled), end NULL, unrendered, no num,
+//     non-persistent tag 2 -> derives unpublished and inactive. The NULL start
+//     pins the 3VL-safe false filters (drafts must match published=false and
+//     active=false despite SQL NULL comparisons).
 // FIXTURE_USER_ID votes on P1 + P2 only, so published/notVoted leaves P4.
 export const FIXTURE_POLLS: FixturePoll[] = [
   {
@@ -188,6 +192,25 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     message_id: 1005n,
     crosspost_message_ids: [],
     tag: 1,
+    image: null,
+    description: null,
+    thread_question: null,
+    show_question: true,
+    show_options: true,
+    show_voting: true,
+    fallback: false,
+  },
+  {
+    id: 6,
+    question: "P6 draft no start",
+    guild_id: FIXTURE_GUILD_ID,
+    choices: ["P6 choice 0", "P6 choice 1"],
+    start_time: null,
+    end_time: null,
+    num: null,
+    message_id: null,
+    crosspost_message_ids: [],
+    tag: 2,
     image: null,
     description: null,
     thread_question: null,

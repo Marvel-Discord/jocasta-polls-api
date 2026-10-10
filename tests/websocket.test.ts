@@ -384,9 +384,10 @@ describe("service write emission (real service calls end-to-end)", () => {
       id: createdIds[1],
     });
 
-    // tag 2 = P3 + P4
+    // tag 2 = P3 + P4 + P6 (the draft)
     const updated = await updatePollsByTag(2, { question: "renamed" });
     const updatedIds = (await Promise.all([
+      nextMessage(ws),
       nextMessage(ws),
       nextMessage(ws),
     ])).map((raw) => JSON.parse(raw).id);

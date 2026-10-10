@@ -54,9 +54,11 @@ describe("buildPollAuxFilters", () => {
     ]);
   });
 
-  it("published=false → NOT the derived conjunct (drafts + scheduled)", () => {
+  it("published=false → drafts-or-scheduled OR conjunct (drafts + scheduled)", () => {
+    // 3VL-safe complement: NOT {start_time <= now} would evaluate to
+    // NULL for drafts (NULL start) and exclude them.
     expect(buildPollAuxFilters({ published: false }, NOW)).toEqual([
-      { NOT: { start_time: { lte: NOW } } },
+      { OR: [{ start_time: null }, { start_time: { gt: NOW } }] },
     ]);
   });
 
@@ -70,9 +72,17 @@ describe("buildPollAuxFilters", () => {
     ]);
   });
 
-  it("active=false is the exact NOT complement of the derived-active object", () => {
+  it("active=false → not-started-or-ended OR conjunct (3VL-safe complement)", () => {
+    // NOT the derived-active object would drop drafts (NULL start);
+    // the end_time lte arm alone is NULL-safe for open-ended polls.
     expect(buildPollAuxFilters({ active: false }, NOW)).toEqual([
-      { NOT: DERIVED_ACTIVE },
+      {
+        OR: [
+          { start_time: null },
+          { start_time: { gt: NOW } },
+          { end_time: { lte: NOW } },
+        ],
+      },
     ]);
   });
 
@@ -283,8 +293,9 @@ describe("GET /api/v1/polls unpublished gate", () => {
 
     expect(response.status).toBe(200);
     // P5 (started, ended) is the only started inactive poll; the
-    // not-yet-started P3 also fails the derived-active conjunct but the
-    // route's forced published:true must exclude it.
+    // not-yet-started P3 and the draft P6 now match the active=false
+    // OR conjunct, but the route's forced published:true must exclude
+    // them (AND composition).
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([5]);
     expect(
       response.body.data.every((poll: any) => poll.published === true),

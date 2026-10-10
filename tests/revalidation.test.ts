@@ -117,8 +117,9 @@ describe("bot write revalidation (fail-closed)", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.message).toBe("Polls updated successfully");
+    // tag 2 now also holds the draft P6, so the rename reaches it too.
     expect(response.body.polls.map((poll: { id: number }) => poll.id)).toEqual(
-      [3, 4],
+      [3, 4, 6],
     );
     expect(getGuildMemberRolesMock).toHaveBeenCalledWith(
       FIXTURE_GUILD_ID,

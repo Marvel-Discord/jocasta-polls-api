@@ -65,13 +65,15 @@ describe("bot poll reads", () => {
     expect(response.body).toHaveProperty("message");
   });
 
-  it("allows published=false directly (bot privilege): only the unpublished P3", async () => {
+  it("allows published=false directly (bot privilege): scheduled P3 + draft P6 (3VL pin)", async () => {
     const response = await request(app)
       .get(`/api/v1/bot/polls?guildId=${GUILD}&published=false`)
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+    // The draft P6 (NULL start_time) must match published=false — a
+    // NOT-complement under SQL three-valued logic would drop it.
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 6]);
   });
 
   it("returns a single poll contract shape; unknown id gives 404", async () => {
@@ -136,9 +138,10 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5, 6]);
     response.body.data.forEach(assertContractShape);
-    // Computed active: only the unpublished P3 and the ended P5 are inactive.
+    // Computed active: the unpublished P3, the ended P5, and the draft
+    // P6 (never started) are inactive.
     expect(
       response.body.data.map((poll: any) => [poll.id, poll.active]),
     ).toEqual([
@@ -147,8 +150,9 @@ describe("bot poll reads", () => {
       [2, true],
       [1, true],
       [5, false],
+      [6, false],
     ]);
-    expect(response.body.meta.total).toBe(5);
+    expect(response.body.meta.total).toBe(6);
 
     const secondPage = await request(app)
       .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&page=2&limit=2`)
@@ -157,7 +161,7 @@ describe("bot poll reads", () => {
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data.map((poll: any) => poll.id)).toEqual([2, 1]);
     expect(secondPage.body.meta).toEqual({
-      total: 5,
+      total: 6,
       page: 2,
       limit: 2,
       totalPages: 3,
@@ -172,16 +176,28 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5, 6]);
   });
 
-  it("sync with published=false returns only the unpublished P3", async () => {
+  it("sync with published=false returns the scheduled P3 and the draft P6", async () => {
     const response = await request(app)
       .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&published=false`)
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 6]);
+  });
+
+  it("sync with active=false includes the draft P6 (3VL pin)", async () => {
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&active=false`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    // Not-started (P3 scheduled, P6 draft with NULL start_time) plus
+    // ended (P5); the draft must appear — a NOT-complement under SQL
+    // three-valued logic would drop it.
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 5, 6]);
   });
 
   it("sync with published=true returns only the published polls", async () => {
