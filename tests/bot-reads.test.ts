@@ -73,7 +73,7 @@ describe("bot poll reads", () => {
     expect(response.status).toBe(200);
     // The draft P6 (NULL start_time) must match published=false — a
     // NOT-complement under SQL three-valued logic would drop it.
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 6]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([6, 3]);
   });
 
   it("returns a single poll contract shape; unknown id gives 404", async () => {
@@ -138,19 +138,19 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5, 6]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([6, 3, 4, 2, 1, 5]);
     response.body.data.forEach(assertContractShape);
     // Computed active: the unpublished P3, the ended P5, and the draft
     // P6 (never started) are inactive.
     expect(
       response.body.data.map((poll: any) => [poll.id, poll.active]),
     ).toEqual([
+      [6, false],
       [3, false],
       [4, true],
       [2, true],
       [1, true],
       [5, false],
-      [6, false],
     ]);
     expect(response.body.meta.total).toBe(6);
 
@@ -159,7 +159,7 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(secondPage.status).toBe(200);
-    expect(secondPage.body.data.map((poll: any) => poll.id)).toEqual([2, 1]);
+    expect(secondPage.body.data.map((poll: any) => poll.id)).toEqual([4, 2]);
     expect(secondPage.body.meta).toEqual({
       total: 6,
       page: 2,
@@ -176,7 +176,7 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 4, 2, 1, 5, 6]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([6, 3, 4, 2, 1, 5]);
   });
 
   it("sync with published=false returns the scheduled P3 and the draft P6", async () => {
@@ -185,7 +185,7 @@ describe("bot poll reads", () => {
       .set("Authorization", `Bearer ${TOKEN}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 6]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([6, 3]);
   });
 
   it("sync with active=false includes the draft P6 (3VL pin)", async () => {
@@ -197,7 +197,7 @@ describe("bot poll reads", () => {
     // Not-started (P3 scheduled, P6 draft with NULL start_time) plus
     // ended (P5); the draft must appear — a NOT-complement under SQL
     // three-valued logic would drop it.
-    expect(response.body.data.map((poll: any) => poll.id)).toEqual([3, 5, 6]);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([6, 3, 5]);
   });
 
   it("sync with published=true returns only the published polls", async () => {

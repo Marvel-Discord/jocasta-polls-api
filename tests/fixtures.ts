@@ -550,7 +550,12 @@ function sortPolls(rows: FixturePoll[], orderBy: unknown): FixturePoll[] {
   const sorted = [...rows];
   if (isRecord(orderBy) && hasExactKeys(orderBy, ["start_time"])) {
     const dir = dirOf(orderBy.start_time);
-    sorted.sort((a, b) => cmpNum(toMillis(a.start_time), toMillis(b.start_time), dir));
+    // Postgres NULL ordering: ASC → NULLS LAST, DESC → NULLS FIRST.
+    // toMillis maps NULL to 0, so partition explicitly instead.
+    const nulls = sorted.filter((p) => p.start_time === null);
+    const vals = sorted.filter((p) => p.start_time !== null);
+    vals.sort((a, b) => cmpNum(toMillis(a.start_time), toMillis(b.start_time), dir));
+    return dir === "asc" ? [...vals, ...nulls] : [...nulls, ...vals];
   } else {
     const votesOrder = isRecord(orderBy) ? orderBy.votes : undefined;
     const countDir = isRecord(votesOrder) ? votesOrder._count : undefined;
