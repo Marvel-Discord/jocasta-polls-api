@@ -1,9 +1,12 @@
 import config from "@/config";
 import { DISCORD_API_BASE } from "@/services/discordService";
 import { getGuildById } from "@/services/guildService";
+import { moduleLogger } from "@/logger";
 import type { DiscordUserProfile } from "@/types/discordUserProfile";
 
 import { Request } from "express";
+
+const logger = moduleLogger("checkDiscordMembership");
 
 const roleCache = new Map<
   string,
@@ -67,7 +70,10 @@ export async function checkUserHasManagementPerms(
     );
 
     if (!response.ok) {
-      console.log(response.status, response.statusText);
+      logger.warn(
+        { status: response.status, statusText: response.statusText },
+        "membership check response",
+      );
       return false;
     }
 
@@ -80,7 +86,7 @@ export async function checkUserHasManagementPerms(
       userRoles.includes(roleId.toString())
     );
   } catch (err) {
-    console.error("Error checking management permissions:", err);
+    logger.error({ err }, "Error checking management permissions");
     return false;
   }
 }
@@ -115,7 +121,7 @@ export async function checkUserInServer(
 
     return true;
   } catch (err) {
-    console.error("Error checking if user is in server:", err);
+    logger.error({ err }, "Error checking if user is in server");
     return false;
   }
 }

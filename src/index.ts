@@ -4,7 +4,10 @@ import { createApp } from "./app";
 import "./utils";
 import config from "./config";
 import { attachPollScheduler } from "./services/pollSchedulerService";
+import { moduleLogger } from "./logger";
 import { attachBotEventsServer } from "./websocket/botEventsServer";
+
+const logger = moduleLogger("index");
 
 async function startServer() {
   try {
@@ -16,12 +19,12 @@ async function startServer() {
       config.scheduler.endLookbackMs,
     );
     server.listen(config.api.port, "0.0.0.0", () => {
-      console.log(`⚡[server]: Server is running on port ${config.api.port}`);
+      logger.info(`⚡[server]: Server is running on port ${config.api.port}`);
     });
     server.on("close", () => detachPollScheduler());
-    console.log("Server started successfully with persistent sessions");
+    logger.info("Server started successfully with persistent sessions");
   } catch (error) {
-    console.error("Failed to start server:", error);
+    logger.error({ err: error }, "Failed to start server");
     process.exit(1);
   }
 }

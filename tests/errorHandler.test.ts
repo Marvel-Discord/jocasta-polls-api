@@ -4,6 +4,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 
 import { createApp } from "@/app";
 import { NotFoundError } from "@/errors";
+import { logger } from "@/logger";
 import { errorHandler } from "@/middleware/errorHandler";
 
 let app: Express;
@@ -34,7 +35,10 @@ describe("errorHandler middleware", () => {
   });
 
   it("maps unknown errors to a generic 500 and logs them", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Pino children inherit level methods from the root logger's
+    // prototype chain, so spying on the root intercepts the ApiError
+    // module child's error calls.
+    const loggerSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const res = mockRes();
     const next = vi.fn() as NextFunction;
     const error = new Error("boom");
@@ -42,14 +46,14 @@ describe("errorHandler middleware", () => {
     try {
       errorHandler(error, {} as Request, res, next);
 
-      expect(consoleSpy).toHaveBeenCalledWith(error);
+      expect(loggerSpy).toHaveBeenCalledWith(error);
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         message: "An unexpected error occurred",
       });
       expect(next).not.toHaveBeenCalled();
     } finally {
-      consoleSpy.mockRestore();
+      loggerSpy.mockRestore();
     }
   });
 

@@ -6,12 +6,14 @@ import { apiRouter } from "@/routes";
 import config from "@/config";
 import { initializeAuth } from "@/auth/passport";
 import { errorHandler } from "@/middleware/errorHandler";
-import { logger, pinoHttpOptions } from "@/logger";
+import { logger as rootLogger, moduleLogger, pinoHttpOptions } from "@/logger";
+
+const logger = moduleLogger("app");
 
 export async function createApp() {
   const app = express();
 
-  app.use(pinoHttp({ logger, ...pinoHttpOptions }));
+  app.use(pinoHttp({ logger: rootLogger, ...pinoHttpOptions }));
 
   const corsOptions = {
     origin: (
@@ -33,7 +35,7 @@ export async function createApp() {
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log("CORS blocked origin:", origin);
+        logger.warn({ origin }, "CORS blocked origin");
         callback(new Error("Not allowed by CORS"), false);
       }
     },

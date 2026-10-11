@@ -1,4 +1,5 @@
 import { prisma } from "@/client";
+import { moduleLogger } from "@/logger";
 import { emitBotEvent } from "@/websocket/botEventEmitter";
 
 /**
@@ -18,6 +19,8 @@ import { emitBotEvent } from "@/websocket/botEventEmitter";
 
 export const DEFAULT_SCHEDULER_INTERVAL_MS = 30_000;
 export const DEFAULT_END_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+const logger = moduleLogger("pollSchedulerService");
 
 export async function findDueStarts(now: Date): Promise<{ id: number }[]> {
   return prisma.poll.findMany({
@@ -53,6 +56,10 @@ export async function sweepPollSchedule(
     findDueStarts(now),
     findDueEnds(now, endLookbackMs),
   ]);
+  logger.debug(
+    { starts: dueStarts.length, ends: dueEnds.length },
+    "scheduler sweep",
+  );
   for (const { id } of dueStarts) emitBotEvent("polls", "start", id);
   for (const { id } of dueEnds) emitBotEvent("polls", "end", id);
   return {
@@ -68,7 +75,7 @@ export function attachPollScheduler(
 ): () => void {
   const tick = () => {
     sweepPollSchedule(nowFn(), endLookbackMs).catch((error) => {
-      console.error(`[PollScheduler] Sweep failed: ${error}`);
+      logger.error({ err: error }, "[PollScheduler] Sweep failed");
     });
   };
   tick();
