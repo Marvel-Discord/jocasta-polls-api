@@ -25,17 +25,30 @@ export const POLL_WITH_VOTES_INCLUDE = {
 } as const;
 
 /**
- * Derives poll activity from timestamps: a poll is active when it is
- * published, has started, and has not ended. Open-ended polls (NULL
- * end_time) stay active once started. At `now === end_time` exactly the
- * poll is inactive.
+ * Derives publication from timestamps: a poll is published once its
+ * start_time has passed ("published means started" — author decision
+ * 2026-09-02; the column was dropped like `active` before it). The
+ * Discord render (message_id) is deliberately NOT part of this: voting
+ * opens at start_time regardless of render lag.
+ */
+export function computePublished(
+  poll: Pick<PollModel, "start_time">,
+  now: Date = new Date(),
+): boolean {
+  return poll.start_time !== null && poll.start_time <= now;
+}
+
+/**
+ * Derives poll activity from timestamps: a poll is active when it has
+ * started and has not ended. Open-ended polls (NULL end_time) stay
+ * active once started. At `now === end_time` exactly the poll is
+ * inactive.
  */
 export function computeActive(
-  poll: Pick<PollModel, "published" | "start_time" | "end_time">,
+  poll: Pick<PollModel, "start_time" | "end_time">,
   now: Date = new Date(),
 ): boolean {
   return (
-    poll.published &&
     poll.start_time !== null &&
     poll.start_time <= now &&
     (poll.end_time === null || poll.end_time > now)
@@ -45,7 +58,8 @@ export function computeActive(
 /**
  * Serializes a poll with its vote relation into the API contract shape:
  * tallies votes per choice, emits start_time/end_time, and derives
- * `active` from the timestamps (the model no longer stores it).
+ * `published` and `active` from the timestamps (the model no longer
+ * stores them).
  */
 export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll {
   const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
@@ -58,6 +72,7 @@ export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll
   }
   return {
     ...restPoll,
+    published: computePublished(poll, now),
     active: computeActive(poll, now),
     votes: voteCounts,
     total_votes: totalVotes,

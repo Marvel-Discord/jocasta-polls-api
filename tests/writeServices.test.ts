@@ -254,7 +254,7 @@ describe("createPolls", () => {
     ...overrides,
   });
 
-  it("creates with a random 5-digit id, published false, end_time persisted", async () => {
+  it("creates with a random 5-digit id, end_time persisted", async () => {
     const created = await createPolls([
       baseCreate({ time: NEW_TIME, end_time: NEW_END }),
     ]);
@@ -263,7 +263,6 @@ describe("createPolls", () => {
     const model = created[0];
     expect(model.id).toBeGreaterThanOrEqual(10000);
     expect(model.id).toBeLessThanOrEqual(99999);
-    expect(model.published).toBe(false);
     expect(model.start_time).toEqual(new Date(NEW_TIME));
     expect(model.end_time).toEqual(new Date(NEW_END));
     expect(model.votes).toEqual([]);
@@ -360,8 +359,8 @@ describe("updatePollsByTag", () => {
   });
 
   it("mixed batch: matrix rejects per-poll and the whole batch is atomic", async () => {
-    // tag 2 = P3 (unpublished) + P4 (published): moving start_time is
-    // frozen on P4, so nothing may be written.
+    // tag 2 = P3 (unpublished) + P4 (published) + P6 (draft): moving
+    // start_time is frozen on P4, so nothing may be written.
     const rejected = updatePollsByTag(2, { start_time: NEW_TIME });
     await expect(rejected).rejects.toThrow(
       "Cannot change the time of a published poll",
@@ -372,6 +371,7 @@ describe("updatePollsByTag", () => {
     expect(pollById(4).start_time).toEqual(
       new Date("2024-03-15T12:00:00.000Z"),
     );
+    expect(pollById(6).start_time).toBeNull();
   });
 
   it("unknown tags update nothing and return an empty batch", async () => {
@@ -412,7 +412,6 @@ describe("web write shims (POST /api/v1/polls/...)", () => {
     expect(response.body.message).toBe("Polls created successfully");
     const poll = response.body.polls[0];
     expect(poll.id).toBeGreaterThanOrEqual(10000);
-    expect(poll.published).toBe(false);
     expect(poll.start_time).toBe(NEW_TIME);
     expect(poll.end_time).toBe(NEW_END);
     expect(poll.votes).toEqual([0, 0]);
@@ -439,7 +438,6 @@ describe("web write shims (POST /api/v1/polls/...)", () => {
     expect(response.body.message).toBe("Polls updated successfully");
     expect(response.body.polls[0].id).toBe(3);
     expect(response.body.polls[0].question).toBe("P3 edited");
-    expect(response.body.polls[0].published).toBe(false);
   });
 
   it("update: matrix rejections surface as 400", async () => {
@@ -490,7 +488,6 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
     expect(response.body.message).toBe("Polls created successfully");
     const poll = response.body.polls[0];
     expect(poll.id).toBeGreaterThanOrEqual(10000);
-    expect(poll.published).toBe(false);
     expect(poll.start_time).toBe(NEW_TIME);
   });
 
@@ -564,8 +561,9 @@ describe("bot write shims (POST /api/v1/bot/polls/...)", () => {
       .send({ tag: 2, question: "renamed" });
     expect(response.status).toBe(200);
     expect(response.body.message).toBe("Polls updated successfully");
+    // tag 2 polls in fixture order: P3, P4, and the draft P6.
     expect(response.body.polls.map((poll: { id: number }) => poll.id)).toEqual(
-      [3, 4],
+      [3, 4, 6],
     );
     expect(response.body.polls.every(
       (poll: { question: string }) => poll.question === "renamed",

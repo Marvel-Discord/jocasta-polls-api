@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { serializePoll } from "@/services/pollSerializer";
+import { computePublished, serializePoll } from "@/services/pollSerializer";
 
 const BASE_POLL = {
   id: 42,
   question: "Best hero?",
-  published: true,
   guild_id: BigInt("123456789"),
   choices: ["A", "B", "C"],
   start_time: new Date("2026-01-01T12:00:00Z"),
@@ -23,9 +22,13 @@ const BASE_POLL = {
   fallback: false,
 };
 
-type PollFixture = Omit<typeof BASE_POLL, "start_time" | "end_time"> & {
+type PollFixture = Omit<
+  typeof BASE_POLL,
+  "start_time" | "end_time" | "message_id"
+> & {
   start_time: Date | null;
   end_time: Date | null;
+  message_id: bigint | null;
   votes: { choice: number }[];
   tagRelation?: null;
 };
@@ -143,13 +146,6 @@ describe("serializePoll", () => {
     expect(serializePoll(poll, now).active).toBe(false);
   });
 
-  it("derives active=false for unpublished polls regardless of timing", () => {
-    const poll = makePoll({ published: false, votes: [] });
-    const now = new Date("2026-01-04T12:00:00Z");
-
-    expect(serializePoll(poll, now).active).toBe(false);
-  });
-
   it("derives active=true for open-ended polls once started (end null)", () => {
     const poll = makePoll({ end_time: null, votes: [] });
     const now = new Date("2030-01-01T00:00:00Z");
@@ -177,5 +173,42 @@ describe("serializePoll", () => {
 
     expect(result.tag).toBe(3);
     expect(typeof result.tag).toBe("number");
+  });
+});
+
+describe("computePublished", () => {
+  it("true once start_time has passed", () => {
+    const poll = makePoll({
+      start_time: new Date("2024-01-15T12:00:00.000Z"),
+    });
+    expect(computePublished(poll, new Date("2024-06-01T12:00:00.000Z"))).toBe(
+      true,
+    );
+  });
+
+  it("false before start_time (scheduled)", () => {
+    const poll = makePoll({
+      start_time: new Date("2030-06-01T12:00:00.000Z"),
+    });
+    expect(computePublished(poll, new Date("2024-06-01T12:00:00.000Z"))).toBe(
+      false,
+    );
+  });
+
+  it("false with no start_time (draft)", () => {
+    const poll = makePoll({ start_time: null });
+    expect(computePublished(poll, new Date("2024-06-01T12:00:00.000Z"))).toBe(
+      false,
+    );
+  });
+
+  it("is independent of render state (message_id)", () => {
+    const poll = makePoll({
+      start_time: new Date("2024-01-15T12:00:00.000Z"),
+      message_id: null,
+    });
+    expect(computePublished(poll, new Date("2024-06-01T12:00:00.000Z"))).toBe(
+      true,
+    );
   });
 });

@@ -10,7 +10,6 @@ datasource db {
 model Poll {
   id                    Int       @id
   question              String
-  published             Boolean   @default(false)
   guild_id              BigInt
   choices               String[]
   start_time            DateTime? @db.Timestamptz

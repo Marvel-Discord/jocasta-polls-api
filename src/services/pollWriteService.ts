@@ -42,8 +42,8 @@ const EDITABLE_UPDATE_FIELDS = new Set<keyof typeof Prisma.PollScalarFieldEnum>(
 
 /**
  * Fields that only the lifecycle endpoints may write (publish owns
- * num/message_id/crosspost_message_ids/published, create owns guild_id
- * and fallback), derived from the Prisma model so schema changes can't
+ * num/message_id/crosspost_message_ids, create owns guild_id and
+ * fallback), derived from the Prisma model so schema changes can't
  * drift. Their presence in an update body fails loudly with the
  * designated-endpoint message instead of silently stripping.
  */
@@ -100,10 +100,9 @@ function normalizePollGuildId(poll: PollWriteInput): NormalizedPollInput {
 
 /**
  * Creates polls: bulk validation (shape, required tag, guild scope, tag
- * existence), unique random 5-digit ids, `published: false` like the
- * bot, and `end_time` alongside the `time`/`start_time` alias rule.
- * Returns the created models with their (empty) vote relation; routes
- * serialize.
+ * existence), unique random 5-digit ids, and `end_time` alongside the
+ * `time`/`start_time` alias rule. Returns the created models with their
+ * (empty) vote relation; routes serialize.
  */
 export async function createPolls(
   pollsData: PollWriteInput[],
@@ -157,7 +156,6 @@ export async function createPolls(
         data: {
           id: pollId,
           question: poll.question!,
-          published: false, // Always false initially like bot
           guild_id: poll.guild_id!,
           choices: poll.choices!,
           start_time: startInput ? new Date(startInput) : null,
@@ -194,8 +192,8 @@ export async function createPolls(
  * post-publish field matrix, then the update mapping (start_time
  * resolved via the `time` alias; end_time freely editable in any
  * state). The lifecycle-owned fields (num/message_id/crossposts) plus
- * guild_id and fallback are rejected up front — publish/end/crosspost
- * are their designated writers, create sets guild_id/fallback — and
+ * guild_id and fallback are rejected up front — publish/crosspost are
+ * their designated writers, create sets guild_id/fallback — and
  * guild scoping is checked against the EXISTING polls since the input
  * no longer carries guild_id. Returns the updated models with their
  * vote relation; routes serialize.
@@ -264,8 +262,6 @@ export async function updatePolls(
           ...(poll.end_time !== undefined && {
             end_time: coerceDate(poll.end_time),
           }),
-          // Preserve published state from existing poll
-          published: existingPoll.published,
         },
         include: POLL_WITH_VOTES_INCLUDE,
       });

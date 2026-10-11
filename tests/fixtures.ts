@@ -40,7 +40,6 @@ const P5_END = new Date("2024-05-01T12:00:00.000Z");
 export type FixturePoll = {
   id: number;
   question: string;
-  published: boolean;
   guild_id: bigint;
   choices: string[];
   start_time: Date | null;
@@ -100,12 +99,15 @@ export type FixtureGuildSettings = {
 // P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
 // P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
 // P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
+// P6: draft — start_time NULL (never scheduled), end NULL, unrendered, no num,
+//     non-persistent tag 2 -> derives unpublished and inactive. The NULL start
+//     pins the 3VL-safe false filters (drafts must match published=false and
+//     active=false despite SQL NULL comparisons).
 // FIXTURE_USER_ID votes on P1 + P2 only, so published/notVoted leaves P4.
 export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 1,
     question: "P1 published visible voting",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P1 choice 0", "P1 choice 1"],
     start_time: P1_START,
@@ -125,7 +127,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 2,
     question: "P2 published hidden voting",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P2 choice 0", "P2 choice 1"],
     start_time: P2_START,
@@ -145,7 +146,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 3,
     question: "P3 unpublished scheduled",
-    published: false,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P3 choice 0", "P3 choice 1"],
     start_time: P3_START,
@@ -165,7 +165,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 4,
     question: "P4 published end scheduled",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P4 choice 0", "P4 choice 1"],
     start_time: P4_START,
@@ -185,7 +184,6 @@ export const FIXTURE_POLLS: FixturePoll[] = [
   {
     id: 5,
     question: "P5 published ended persistent",
-    published: true,
     guild_id: FIXTURE_GUILD_ID,
     choices: ["P5 choice 0", "P5 choice 1"],
     start_time: P5_START,
@@ -194,6 +192,25 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     message_id: 1005n,
     crosspost_message_ids: [],
     tag: 1,
+    image: null,
+    description: null,
+    thread_question: null,
+    show_question: true,
+    show_options: true,
+    show_voting: true,
+    fallback: false,
+  },
+  {
+    id: 6,
+    question: "P6 draft no start",
+    guild_id: FIXTURE_GUILD_ID,
+    choices: ["P6 choice 0", "P6 choice 1"],
+    start_time: null,
+    end_time: null,
+    num: null,
+    message_id: null,
+    crosspost_message_ids: [],
+    tag: 2,
     image: null,
     description: null,
     thread_question: null,
@@ -416,14 +433,13 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
   if (where === undefined) return true;
   if (!isRecord(where)) return unsupported("poll where", where);
   for (const [key, cond] of Object.entries(where)) {
-    if (cond === undefined) continue; // e.g. `published: undefined` from builders
+    if (cond === undefined) continue; // e.g. omitted filter options
     let ok: boolean;
     switch (key) {
       case "id":
         ok = matchIdFilter(poll.id, cond);
         break;
       case "guild_id":
-      case "published":
       case "tag":
       case "num":
         ok = poll[key] === cond;
@@ -534,7 +550,12 @@ function sortPolls(rows: FixturePoll[], orderBy: unknown): FixturePoll[] {
   const sorted = [...rows];
   if (isRecord(orderBy) && hasExactKeys(orderBy, ["start_time"])) {
     const dir = dirOf(orderBy.start_time);
-    sorted.sort((a, b) => cmpNum(toMillis(a.start_time), toMillis(b.start_time), dir));
+    // Postgres NULL ordering: ASC → NULLS LAST, DESC → NULLS FIRST.
+    // toMillis maps NULL to 0, so partition explicitly instead.
+    const nulls = sorted.filter((p) => p.start_time === null);
+    const vals = sorted.filter((p) => p.start_time !== null);
+    vals.sort((a, b) => cmpNum(toMillis(a.start_time), toMillis(b.start_time), dir));
+    return dir === "asc" ? [...vals, ...nulls] : [...nulls, ...vals];
   } else {
     const votesOrder = isRecord(orderBy) ? orderBy.votes : undefined;
     const countDir = isRecord(votesOrder) ? votesOrder._count : undefined;
@@ -577,7 +598,6 @@ async function pollCount(args: MockArgs = {}): Promise<number> {
 const POLL_FIELD_NAMES = new Set([
   "id",
   "question",
-  "published",
   "guild_id",
   "choices",
   "start_time",
@@ -804,17 +824,32 @@ async function tagFindMany(args: MockArgs = {}): Promise<Row[]> {
   const take = isRecord(pollsInclude) ? pollsInclude.take : undefined;
   const whereOk =
     isRecord(pollsWhere) &&
-    Object.keys(pollsWhere).every((key) => key === "published");
-  const orderOk = isRecord(pollsOrderBy) && hasExactKeys(pollsOrderBy, ["start_time"]);
+    Object.keys(pollsWhere).every((key) => key === "start_time");
+  // Accept both orderBy forms Prisma allows for the embedded polls:
+  // { start_time: "desc" } and { start_time: { sort, nulls } }. The
+  // nulls option must agree with toMillis' NULL→0 mapping (nulls-last
+  // in desc) or the mock would certify wrong ordering.
+  const orderValue = isRecord(pollsOrderBy) ? pollsOrderBy.start_time : undefined;
+  const orderOk =
+    isRecord(pollsOrderBy) && hasExactKeys(pollsOrderBy, ["start_time"]);
+  let dir: "asc" | "desc";
+  if (orderOk && isRecord(orderValue) && hasExactKeys(orderValue, ["sort", "nulls"])) {
+    if (orderValue.nulls !== "last") {
+      return unsupported("tag.findMany include polls orderBy nulls", orderValue);
+    }
+    dir = dirOf(orderValue.sort);
+  } else if (orderOk) {
+    dir = dirOf(orderValue);
+  } else {
+    return unsupported("tag.findMany include", include);
+  }
   if (
     !isRecord(pollsInclude) ||
     !whereOk ||
-    !orderOk ||
     (take !== undefined && typeof take !== "number")
   ) {
     return unsupported("tag.findMany include", include);
   }
-  const dir = dirOf(pollsOrderBy.start_time);
   return rows.map((tag) => {
     const polls = FIXTURE_POLLS.filter(
       (poll) => poll.tag === tag.tag && matchPoll(poll, pollsWhere),

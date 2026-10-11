@@ -19,7 +19,6 @@ const GUILD = FIXTURE_GUILD_ID.toString();
 const NOW = new Date("2026-06-15T12:00:00.000Z");
 
 const DERIVED_ACTIVE = {
-  published: true,
   start_time: { lte: NOW },
   OR: [{ end_time: null }, { end_time: { gt: NOW } }],
 };
@@ -49,15 +48,41 @@ describe("buildPollAuxFilters", () => {
     expect(buildPollAuxFilters({ num: 7 }, NOW)).toEqual([{ num: 7 }]);
   });
 
-  it("active=true derives published+started+not-ended against the injected now", () => {
-    expect(buildPollAuxFilters({ active: true }, NOW)).toEqual([
-      DERIVED_ACTIVE,
+  it("published=true → derived conjunct (started)", () => {
+    expect(buildPollAuxFilters({ published: true }, NOW)).toEqual([
+      { start_time: { lte: NOW } },
     ]);
   });
 
-  it("active=false is the exact NOT complement of the derived-active object", () => {
+  it("published=false → drafts-or-scheduled OR conjunct (drafts + scheduled)", () => {
+    // 3VL-safe complement: NOT {start_time <= now} would evaluate to
+    // NULL for drafts (NULL start) and exclude them.
+    expect(buildPollAuxFilters({ published: false }, NOW)).toEqual([
+      { OR: [{ start_time: null }, { start_time: { gt: NOW } }] },
+    ]);
+  });
+
+  it("active conjunct no longer references published", () => {
+    const conjuncts = buildPollAuxFilters({ active: true }, NOW);
+    expect(conjuncts).toEqual([
+      {
+        start_time: { lte: NOW },
+        OR: [{ end_time: null }, { end_time: { gt: NOW } }],
+      },
+    ]);
+  });
+
+  it("active=false → not-started-or-ended OR conjunct (3VL-safe complement)", () => {
+    // NOT the derived-active object would drop drafts (NULL start);
+    // the end_time lte arm alone is NULL-safe for open-ended polls.
     expect(buildPollAuxFilters({ active: false }, NOW)).toEqual([
-      { NOT: DERIVED_ACTIVE },
+      {
+        OR: [
+          { start_time: null },
+          { start_time: { gt: NOW } },
+          { end_time: { lte: NOW } },
+        ],
+      },
     ]);
   });
 
@@ -267,9 +292,10 @@ describe("GET /api/v1/polls unpublished gate", () => {
     );
 
     expect(response.status).toBe(200);
-    // P5 (published, ended) is the only published inactive poll; the
-    // unpublished P3 also fails the derived-active conjunct but the
-    // route's forced published:true must exclude it.
+    // P5 (started, ended) is the only started inactive poll; the
+    // not-yet-started P3 and the draft P6 now match the active=false
+    // OR conjunct, but the route's forced published:true must exclude
+    // them (AND composition).
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([5]);
     expect(
       response.body.data.every((poll: any) => poll.published === true),
