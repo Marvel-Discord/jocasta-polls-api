@@ -70,7 +70,10 @@ export async function checkUserHasManagementPerms(
     );
 
     if (!response.ok) {
-      logger.warn(
+      // 401 (expired token) and 5xx are genuinely abnormal; 403/404 are the
+      // expected negatives for non-managers and stay debug
+      const abnormal = response.status === 401 || response.status >= 500;
+      logger[abnormal ? "warn" : "debug"](
         { status: response.status, statusText: response.statusText },
         "membership check response",
       );

@@ -54,18 +54,22 @@ describe("pino-http middleware options", () => {
     return { app, stream };
   }
 
-  it("redacts authorization and set-cookie headers", async () => {
+  it("redacts authorization, cookie, and set-cookie headers", async () => {
     const { app, stream } = captureApp();
     app.use((_req, res) => {
       res.setHeader("set-cookie", "session=secret-cookie-value");
       res.status(404).json({ message: "not found" });
     });
 
-    await request(app).get("/").set("Authorization", "Bearer super-secret-token");
+    await request(app)
+      .get("/")
+      .set("Authorization", "Bearer super-secret-token")
+      .set("Cookie", "connect.sid=s%3Asecret-session-id.signature");
 
     const [record] = requestRecords(stream);
     expect(record).toBeDefined();
     expect(record.req.headers.authorization).toBe("[REDACTED]");
+    expect(record.req.headers.cookie).toBe("[REDACTED]");
     expect(record.res.headers["set-cookie"]).toBe("[REDACTED]");
   });
 

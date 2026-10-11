@@ -45,16 +45,16 @@ async function createSessionStore(): Promise<Store> {
       });
 
       redisClient.on("connect", () => {
-        logger.debug("Redis client connected successfully");
+        logger.info("Redis client connected successfully");
       });
 
       redisClient.on("ready", () => {
-        logger.debug("Redis client ready");
+        logger.info("Redis client ready");
       });
 
       logger.debug("Connecting to Redis...");
       await redisClient.connect();
-      logger.debug("Connected to Redis for session storage");
+      logger.info("Connected to Redis for session storage");
 
       // Create RedisStore instance (connect-redis v7+ pattern)
       const redisStore = new RedisStore({

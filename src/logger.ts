@@ -17,7 +17,11 @@ export function moduleLogger(name: string) {
 
 export const pinoHttpOptions: Omit<Options, "logger"> = {
   redact: {
-    paths: ["req.headers.authorization", "res.headers.set-cookie"],
+    paths: [
+      "req.headers.authorization",
+      "req.headers.cookie",
+      "res.headers.set-cookie",
+    ],
     censor: "[REDACTED]",
   },
   customLogLevel: (_req, res, err) =>
