@@ -27,7 +27,7 @@ const discordStrategy = new DiscordStrategy(
 
 async function createSessionStore(): Promise<Store> {
   logger.debug({ enabled: config.redis.enabled }, "Redis enabled");
-  logger.debug({ url: config.redis.url }, "Redis URL");
+  // the URL can embed credentials — never logged
 
   if (config.redis.enabled) {
     try {
