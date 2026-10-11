@@ -1,13 +1,17 @@
 import cors from "cors";
 import express from "express";
+import pinoHttp from "pino-http";
 
 import { apiRouter } from "@/routes";
 import config from "@/config";
 import { initializeAuth } from "@/auth/passport";
 import { errorHandler } from "@/middleware/errorHandler";
+import { logger, pinoHttpOptions } from "@/logger";
 
 export async function createApp() {
   const app = express();
+
+  app.use(pinoHttp({ logger, ...pinoHttpOptions }));
 
   const corsOptions = {
     origin: (

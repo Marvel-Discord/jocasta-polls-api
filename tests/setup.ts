@@ -8,6 +8,7 @@ import "@/utils";
 import { FIXTURE_GUILD_ID } from "./fixtures";
 
 process.env.NODE_ENV = "test";
+process.env.LOG_LEVEL = "silent";
 process.env.DISCORD_CLIENT_ID ||= "test-client-id";
 process.env.DISCORD_CLIENT_SECRET ||= "test-discord-secret";
 process.env.DISCORD_REDIRECT_URI ||= "http://localhost:3000/callback";
