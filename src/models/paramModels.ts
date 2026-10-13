@@ -73,6 +73,14 @@ const PollFilterParamsModel = z
       })
       .transform((val) => val.split(",").map(Number))
       .optional(),
+    // id prefix filter (bot autocompletes, per-keystroke): digit string
+    // translated into a numeric id range by parsePollFilterParams.
+    id_prefix: z
+      .string()
+      .regex(/^\d{1,9}$/, {
+        message: "id_prefix must be a non-empty string of digits",
+      })
+      .optional(),
     num: IntFilter.optional(),
     active: BooleanFilter.optional(),
     has_start: BooleanFilter.optional(),
@@ -128,6 +136,7 @@ export interface PollFilterParams {
   notVoted?: boolean;
   search?: string;
   ids?: number[];
+  id_prefix_range?: { gte: number; lte: number };
   num?: number;
   active?: boolean;
   has_start?: boolean;
@@ -161,6 +170,24 @@ export async function parsePollFilterParams(
     throw new BadRequestError("'ids' cannot be combined with 'userId'");
   }
 
+  // 'id_prefix' → numeric id range. Poll ids are 5-digit (the generator
+  // yields 10000-99999), so a prefix of length L pads to the decade
+  // range [prefix·10^(5-L), prefix·10^(5-L) + 10^(5-L) - 1]; L = 5
+  // degenerates to the exact id (10^0 - 1 = 0). A prefix longer than 5
+  // digits can match no id and is rejected at parse time (400) rather
+  // than silently returning an empty page.
+  let id_prefix_range: { gte: number; lte: number } | undefined;
+  if (result.data.id_prefix !== undefined) {
+    const prefix = result.data.id_prefix;
+    if (prefix.length > 5) {
+      throw new BadRequestError(
+        "'id_prefix' exceeds the maximum id length of 5 digits",
+      );
+    }
+    const gte = Number(prefix + "0".repeat(5 - prefix.length));
+    id_prefix_range = { gte, lte: gte + 10 ** (5 - prefix.length) - 1 };
+  }
+
   // Additional validation for orderDir/seed depending on order
   const parsed: PollFilterParams = {
     published: result.data.published,
@@ -169,6 +196,7 @@ export async function parsePollFilterParams(
     notVoted: result.data.notVoted,
     search: result.data.search,
     ids: result.data.ids,
+    id_prefix_range,
     num: result.data.num,
     active: result.data.active,
     has_start: result.data.has_start,

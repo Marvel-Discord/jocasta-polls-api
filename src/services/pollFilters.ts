@@ -60,16 +60,17 @@ function derivedInactiveWhere(now: Date): Prisma.PollWhereInput {
 }
 
 /**
- * Builds the bot-facing aux list filters (ids, num, published, active,
- * has_start, has_end, live, pending_render, ended_since) as an array
- * of conjuncts for AND-appending. Pure — no DB access — so it can be
- * unit tested directly and composed into the list path's filters
- * object. Each conjunct is self-contained: no fragment ever writes a
- * top-level OR into the shared filters.
+ * Builds the bot-facing aux list filters (ids, id_prefix_range, num,
+ * published, active, has_start, has_end, live, pending_render,
+ * ended_since) as an array of conjuncts for AND-appending. Pure — no
+ * DB access — so it can be unit tested directly and composed into the
+ * list path's filters object. Each conjunct is self-contained: no
+ * fragment ever writes a top-level OR into the shared filters.
  */
 export function buildPollAuxFilters(
   params: {
     ids?: number[];
+    id_prefix_range?: { gte: number; lte: number };
     published?: boolean;
     num?: number;
     active?: boolean;
@@ -83,6 +84,10 @@ export function buildPollAuxFilters(
 ): Prisma.PollWhereInput[] {
   const conjuncts: Prisma.PollWhereInput[] = [];
   if (params.ids?.length) conjuncts.push({ id: { in: params.ids } });
+  if (params.id_prefix_range)
+    conjuncts.push({
+      id: { gte: params.id_prefix_range.gte, lte: params.id_prefix_range.lte },
+    });
   if (params.num !== undefined) conjuncts.push({ num: params.num });
   if (params.published === true) conjuncts.push(derivedPublishedWhere(now));
   else if (params.published === false)

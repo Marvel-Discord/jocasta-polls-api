@@ -4,7 +4,12 @@ import type { Express } from "express";
 
 import { createApp } from "@/app";
 import { prisma } from "@/client";
-import { FIXTURE_GUILD_ID, FIXTURE_POLLS, FIXTURE_USER_ID } from "./fixtures";
+import {
+  FIXTURE_GUILD_ID,
+  FIXTURE_POLLS,
+  FIXTURE_USER_ID,
+  type FixturePoll,
+} from "./fixtures";
 
 let app: Express;
 const TOKEN = process.env.BOT_SERVICE_TOKEN!;
@@ -358,6 +363,88 @@ describe("bot poll reads", () => {
         (_, i) => `${statement.values[Number(i) - 1]}`,
       );
       expect(interpolated).toContain("OR thread_question ILIKE %zephyr%");
+    } finally {
+      delete prismaWithRaw.$queryRaw;
+    }
+  });
+
+  it("id_prefix filters by the translated 5-digit id range (temp 5-digit fixture poll)", async () => {
+    // Fixture ids are 1-6 while real poll ids are 5-digit (10000-99999
+    // generator), so the padding deliberately matches no permanent
+    // fixture. Pin a temporary 5-digit draft poll to prove the range
+    // threads end-to-end: prefix "1" → ids 10000-19999 → only the pin.
+    const tempPoll: FixturePoll = {
+      id: 12345,
+      question: "temp 5-digit poll",
+      guild_id: FIXTURE_GUILD_ID,
+      choices: ["temp 0", "temp 1"],
+      start_time: null,
+      end_time: null,
+      num: null,
+      message_id: null,
+      crosspost_message_ids: [],
+      tag: 2,
+      image: null,
+      description: null,
+      thread_question: null,
+      show_question: true,
+      show_options: true,
+      show_voting: true,
+      fallback: false,
+    };
+    FIXTURE_POLLS.push(tempPoll);
+    try {
+      const response = await request(app)
+        .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&id_prefix=1`)
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((poll: any) => poll.id)).toEqual([12345]);
+      expect(response.body.meta.total).toBe(1);
+    } finally {
+      FIXTURE_POLLS.splice(FIXTURE_POLLS.indexOf(tempPoll), 1);
+    }
+  });
+
+  it("id_prefix matching no fixture id returns an empty page", async () => {
+    // All fixture ids (1-6) sit below every translatable prefix range,
+    // so prefix "2" → ids 20000-29999 → empty. An ignored param would
+    // return the full sync set instead.
+    const response = await request(app)
+      .get(`/api/v1/bot/polls/sync?guildId=${GUILD}&id_prefix=2`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.meta.total).toBe(0);
+  });
+
+  it("order=random interpolates the id_prefix range as AND id BETWEEN (raw SQL parity)", async () => {
+    // The fixture prisma does not implement $queryRaw (order=random), so
+    // capture the generated statement instead of executing it; hydrate
+    // P3 from the captured ids and pin the BETWEEN arm for prefix "5".
+    const queryRaw = vi.fn(async (_statement: unknown) => [{ id: 3 }]);
+    const prismaWithRaw = prisma as unknown as { $queryRaw?: unknown };
+    prismaWithRaw.$queryRaw = queryRaw;
+    try {
+      const response = await request(app)
+        .get(
+          `/api/v1/bot/polls?guildId=${GUILD}&published=false&id_prefix=5&order=random`,
+        )
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
+
+      const statement = queryRaw.mock.calls[0][0] as {
+        text: string;
+        values: unknown[];
+      };
+      const interpolated = statement.text.replace(
+        /\$(\d+)/g,
+        (_, i) => `${statement.values[Number(i) - 1]}`,
+      );
+      expect(interpolated).toContain("AND id BETWEEN 50000 AND 59999");
     } finally {
       delete prismaWithRaw.$queryRaw;
     }

@@ -349,6 +349,14 @@ function votesFor(pollId: number): FixtureVote[] {
 function matchIdFilter(id: number, cond: unknown): boolean {
   if (isRecord(cond) && Array.isArray(cond.in)) return cond.in.includes(id);
   if (isRecord(cond) && Array.isArray(cond.notIn)) return !cond.notIn.includes(id);
+  // id_prefix_range conjunct: numeric gte/lte window on the id column.
+  if (
+    isRecord(cond) &&
+    typeof cond.gte === "number" &&
+    typeof cond.lte === "number"
+  ) {
+    return id >= cond.gte && id <= cond.lte;
+  }
   return unsupported("poll where id", cond);
 }
 

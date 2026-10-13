@@ -40,6 +40,7 @@ function pollFilterOptions(params: PollFilterParams) {
   return {
     tag: params.tag,
     ids: params.ids,
+    id_prefix_range: params.id_prefix_range,
     num: params.num,
     active: params.active,
     has_start: params.has_start,

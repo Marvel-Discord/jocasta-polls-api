@@ -17,6 +17,7 @@ interface PollFilters {
   published?: boolean;
   tag?: number;
   ids?: number[];
+  id_prefix_range?: { gte: number; lte: number };
   num?: number;
   active?: boolean;
   has_start?: boolean;
@@ -33,6 +34,9 @@ interface PollFilters {
   orderDir?: OrderDir;
   seed?: number;
 }
+
+/** Numeric id range translated from the `id_prefix` param. */
+export type IdPrefixRange = { gte: number; lte: number };
 
 /**
  * Sanitizes search input for safe use in database queries
@@ -160,6 +164,7 @@ export async function getPolls({
   published,
   tag,
   ids,
+  id_prefix_range,
   num,
   active,
   has_start,
@@ -187,6 +192,7 @@ export async function getPolls({
   const conjuncts = buildPollAuxFilters(
     {
       ids,
+      id_prefix_range,
       num,
       published,
       active,
@@ -221,6 +227,7 @@ export async function getPolls({
       tag,
       searchQuery,
       ids,
+      id_prefix_range,
       seed,
       now,
     });
@@ -259,6 +266,7 @@ async function handleSpecialOrderingQueries({
   tag,
   searchQuery,
   ids,
+  id_prefix_range,
   seed,
   now,
 }: {
@@ -273,6 +281,7 @@ async function handleSpecialOrderingQueries({
   tag?: number;
   searchQuery?: string;
   ids?: number[];
+  id_prefix_range?: IdPrefixRange;
   seed?: number;
   now: Date;
 }): Promise<{ data: Poll[]; randomSeed?: number }> {
@@ -302,6 +311,7 @@ async function handleSpecialOrderingQueries({
       tag,
       searchQuery,
       ids,
+      id_prefix_range,
       filters,
       limit,
       offset,
@@ -349,6 +359,7 @@ async function handleRandomOrderedQuery({
   tag,
   searchQuery,
   ids,
+  id_prefix_range,
   filters,
   limit,
   offset,
@@ -360,6 +371,7 @@ async function handleRandomOrderedQuery({
   tag?: number;
   searchQuery?: string;
   ids?: number[];
+  id_prefix_range?: IdPrefixRange;
   filters: any;
   limit: number;
   offset: number;
@@ -391,6 +403,14 @@ async function handleRandomOrderedQuery({
       ${
         ids?.length
           ? Prisma.sql`AND id = ANY(${ids})`
+          : Prisma.empty
+      }
+      ${
+        // The id_prefix range assumes the 5-digit id space (10000-99999
+        // generator); it is translated at parse time and composes with
+        // every other filter, including order=random.
+        id_prefix_range
+          ? Prisma.sql`AND id BETWEEN ${id_prefix_range.gte} AND ${id_prefix_range.lte}`
           : Prisma.empty
       }
       ${
