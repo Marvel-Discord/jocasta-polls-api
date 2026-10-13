@@ -95,7 +95,9 @@ export type FixtureGuildSettings = {
 //     Started, open-ended (end null) -> derives active.
 // P2: published, hidden voting (show_voting false), 2 votes, persistent tag 1
 //     (matches both live-filter OR arms: derived-active AND persistent).
-//     Started, open-ended -> derives active.
+//     Started, open-ended -> derives active. Its thread_question carries
+//     "zephyr", a word unique across all fixture text fields, so search
+//     tests can pin the thread_question arm in isolation.
 // P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
 // P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
 // P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
@@ -137,7 +139,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     tag: 1,
     image: null,
     description: "P2 description",
-    thread_question: null,
+    thread_question: "P2 zephyr thread",
     show_question: true,
     show_options: true,
     show_voting: false,
@@ -469,6 +471,7 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
         break;
       case "question":
       case "description":
+      case "thread_question":
         ok = matchContains(poll[key] ?? "", cond, `poll where ${key}`);
         break;
       case "choices":

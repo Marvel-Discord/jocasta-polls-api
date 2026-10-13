@@ -321,6 +321,48 @@ describe("bot poll reads", () => {
     expect(response.body.meta.total).toBe(1);
   });
 
+  it("search matches a poll distinguishable only by thread_question", async () => {
+    // "zephyr" appears solely in P2's thread_question — not in any
+    // question, description, or choice — so only the thread_question
+    // arm of the search OR can return P2.
+    const response = await request(app)
+      .get(`/api/v1/bot/polls?guildId=${GUILD}&search=zephyr`)
+      .set("Authorization", `Bearer ${TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.map((poll: any) => poll.id)).toEqual([2]);
+    expect(response.body.meta.total).toBe(1);
+  });
+
+  it("order=random search includes the thread_question ILIKE arm (raw SQL parity)", async () => {
+    // The fixture prisma does not implement $queryRaw (order=random), so
+    // capture the generated statement instead of executing it; hydrate
+    // P2 from the captured ids and pin the thread_question ILIKE arm.
+    const queryRaw = vi.fn(async (_statement: unknown) => [{ id: 2 }]);
+    const prismaWithRaw = prisma as unknown as { $queryRaw?: unknown };
+    prismaWithRaw.$queryRaw = queryRaw;
+    try {
+      const response = await request(app)
+        .get(`/api/v1/bot/polls?guildId=${GUILD}&search=zephyr&order=random`)
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((poll: any) => poll.id)).toEqual([2]);
+
+      const statement = queryRaw.mock.calls[0][0] as {
+        text: string;
+        values: unknown[];
+      };
+      const interpolated = statement.text.replace(
+        /\$(\d+)/g,
+        (_, i) => `${statement.values[Number(i) - 1]}`,
+      );
+      expect(interpolated).toContain("OR thread_question ILIKE %zephyr%");
+    } finally {
+      delete prismaWithRaw.$queryRaw;
+    }
+  });
+
   it("pending_render=true returns started-but-unrendered polls only", async () => {
     // Pin P3 into the past for this test (fixture start is the far-future
     // 2030-06-01 constant); restore afterwards.

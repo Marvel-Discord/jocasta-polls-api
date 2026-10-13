@@ -109,6 +109,12 @@ function buildPollFilters(options: {
               },
             },
             { choices: { has: searchQuery } },
+            {
+              thread_question: {
+                contains: searchQuery,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
           ],
         }
       : {}),
@@ -379,7 +385,7 @@ async function handleRandomOrderedQuery({
       ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
       ${
         searchQuery
-          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}))`
+          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}) OR thread_question ILIKE ${`%${searchQuery}%`})`
           : Prisma.empty
       }
       ${
