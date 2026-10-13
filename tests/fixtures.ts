@@ -542,6 +542,20 @@ function shapePollRow(poll: FixturePoll, include: unknown, select: unknown): Row
       return unsupported("poll include", include);
     }
     row.votes = votesFor(poll.id).map((vote) => ({ choice: vote.choice }));
+    // POLL_WITH_VOTES_INCLUDE's tagRelation: true — attach the full tag
+    // row. A missing FIXTURE_TAGS row mirrors the tag NOT NULL
+    // invariant: fail loudly instead of serializing tag_data: undefined.
+    const tagInclude = isRecord(include) ? include.tagRelation : undefined;
+    if (tagInclude !== undefined) {
+      if (tagInclude !== true) {
+        return unsupported("poll include tagRelation", tagInclude);
+      }
+      const tagRow = FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
+      if (tagRow === undefined) {
+        return unsupported("poll include tagRelation (no tag row)", poll.tag);
+      }
+      row.tagRelation = { ...tagRow };
+    }
   }
   return row;
 }

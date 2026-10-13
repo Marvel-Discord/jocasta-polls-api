@@ -152,6 +152,9 @@ describe("publishPoll", () => {
       message_id: MESSAGE_ID,
       crosspost_message_ids: CROSSPOST_IDS,
       tag: 2,
+      // The embedded tag row, fetched with the votes include; its
+      // current_num reflects the publish increment (1 -> 2).
+      tag_data: { ...tagById(2) },
       image: null,
       description: null,
       thread_question: null,

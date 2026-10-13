@@ -22,6 +22,26 @@ const BASE_POLL = {
   fallback: false,
 };
 
+// The tag relation row for BASE_POLL's tag 3, as POLL_WITH_VOTES_INCLUDE
+// would attach it (full row).
+const TAG_ROW = {
+  tag: 3,
+  name: "T3 fixture tag",
+  guild_id: BigInt("123456789"),
+  channel_id: BigInt("555666"),
+  crosspost_channels: [] as bigint[],
+  crosspost_servers: [] as bigint[],
+  current_num: 7,
+  colour: null,
+  end_message: null,
+  end_message_latest_ids: [] as bigint[],
+  end_message_replace: false,
+  end_message_role_ids: [] as bigint[],
+  end_message_ping: false,
+  end_message_self_assign: false,
+  persistent: true,
+};
+
 type PollFixture = Omit<
   typeof BASE_POLL,
   "start_time" | "end_time" | "message_id"
@@ -30,11 +50,11 @@ type PollFixture = Omit<
   end_time: Date | null;
   message_id: bigint | null;
   votes: { choice: number }[];
-  tagRelation?: null;
+  tagRelation: typeof TAG_ROW;
 };
 
 function makePoll(overrides: Partial<PollFixture> = {}): PollFixture {
-  return { ...BASE_POLL, votes: [], ...overrides };
+  return { ...BASE_POLL, votes: [], tagRelation: TAG_ROW, ...overrides };
 }
 
 const CONTRACT_KEYS = [
@@ -48,6 +68,7 @@ const CONTRACT_KEYS = [
   "message_id",
   "crosspost_message_ids",
   "tag",
+  "tag_data",
   "image",
   "description",
   "thread_question",
@@ -112,7 +133,6 @@ describe("serializePoll", () => {
       start_time: null,
       end_time: null,
       votes: [{ choice: 2 }],
-      tagRelation: null,
     });
     const result = serializePoll(poll);
 
@@ -173,6 +193,15 @@ describe("serializePoll", () => {
 
     expect(result.tag).toBe(3);
     expect(typeof result.tag).toBe("number");
+  });
+
+  it("emits tag_data as the embedded tag relation row", () => {
+    const poll = makePoll({ votes: [{ choice: 0 }] });
+    const result = serializePoll(poll);
+
+    expect(result.tag_data).toEqual(TAG_ROW);
+    expect(result.tag_data.tag).toBe(poll.tag);
+    expect(result).not.toHaveProperty("tagRelation");
   });
 });
 

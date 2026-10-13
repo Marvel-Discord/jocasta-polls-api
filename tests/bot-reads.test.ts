@@ -21,12 +21,16 @@ function assertContractShape(poll: any) {
     "votes",
     "total_votes",
     "active",
+    "tag_data",
   ]) {
     expect(poll).toHaveProperty(field);
   }
   expect(Array.isArray(poll.votes)).toBe(true);
   expect(typeof poll.total_votes).toBe("number");
   expect(typeof poll.active).toBe("boolean");
+  expect(typeof poll.tag_data.tag).toBe("number");
+  expect(typeof poll.tag_data.name).toBe("string");
+  expect(typeof poll.tag_data.channel_id).toBe("string"); // bigint over JSON
   expect(poll).not.toHaveProperty("time");
   expect(poll).not.toHaveProperty("tagRelation");
 }
@@ -49,6 +53,11 @@ describe("bot poll reads", () => {
       [1, true],
       [5, false],
     ]);
+    // Embedded tag object: data[0] is P4 (tag 2), whose fixture row is T2.
+    expect(response.body.data[0].tag_data.tag).toBe(
+      response.body.data[0].tag,
+    );
+    expect(response.body.data[0].tag_data.name).toBe("T2 non-persistent tag");
     expect(response.body.meta).toEqual({
       total: 4,
       page: 1,
@@ -90,6 +99,8 @@ describe("bot poll reads", () => {
     expect(response.body.end_time).toBeNull();
     expect(response.body.guild_id).toBe(GUILD);
     expect(response.body.active).toBe(true);
+    expect(response.body.tag_data.tag).toBe(1);
+    expect(response.body.tag_data.name).toBe("T1 persistent tag");
 
     const missing = await request(app)
       .get("/api/v1/bot/polls/999")

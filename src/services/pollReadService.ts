@@ -2,7 +2,10 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
 import { type PollFilterUser, buildPollAuxFilters } from "@/services/pollFilters";
-import { serializePoll } from "@/services/pollSerializer";
+import {
+  POLL_WITH_VOTES_INCLUDE,
+  serializePoll,
+} from "@/services/pollSerializer";
 import type { Meta, Poll } from "@/types";
 import { OrderDir, OrderType } from "@/types";
 
@@ -325,13 +328,7 @@ async function handleVoteOrderedQuery({
     orderBy: {
       votes: { _count: getOrderDirection(orderDir) },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   return { data: polls.map((poll) => serializePoll(poll, now)) };
@@ -407,13 +404,7 @@ async function handleRandomOrderedQuery({
     where: {
       id: { in: pollIds.map((p) => p.id) },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   // Maintain random order
@@ -450,13 +441,7 @@ async function handleTimeOrderedQuery({
       take: limit,
       skip: (page - 1) * limit,
       orderBy,
-      include: {
-        votes: {
-          select: {
-            choice: true,
-          },
-        },
-      },
+      include: POLL_WITH_VOTES_INCLUDE,
     })
     .then((polls) => polls.map((poll) => serializePoll(poll, now)));
 }
@@ -486,13 +471,7 @@ export async function getPollById(
 ): Promise<Poll | null> {
   const poll = await prisma.poll.findUnique({
     where: { id },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   if (!poll) return null;
@@ -515,13 +494,7 @@ export async function getPollsFromList(
     where: {
       id: { in: pollIds },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   return polls.map((poll) => {
