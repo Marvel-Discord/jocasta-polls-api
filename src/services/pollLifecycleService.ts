@@ -1,11 +1,14 @@
 import { prisma } from "@/client";
 import { BadRequestError, NotFoundError } from "@/errors";
+import { moduleLogger } from "@/logger";
 import {
   POLL_WITH_VOTES_INCLUDE,
   serializePoll,
 } from "@/services/pollSerializer";
 import type { Poll } from "@/types";
 import { emitBotEvent } from "@/websocket/botEventEmitter";
+
+const logger = moduleLogger("pollLifecycleService");
 
 /**
  * Lifecycle transitions (publish/crosspost): the designated writers
@@ -74,7 +77,7 @@ export async function publishPoll(
     include: POLL_WITH_VOTES_INCLUDE,
   });
   emitBotEvent("polls", "update", pollId);
-  console.log(`Published poll ${pollId} as num ${tag.current_num}`);
+  logger.info(`Published poll ${pollId} as num ${tag.current_num}`);
   return serializePoll(updated);
 }
 
@@ -100,6 +103,6 @@ export async function crosspostPoll(
     include: POLL_WITH_VOTES_INCLUDE,
   });
   emitBotEvent("polls", "update", pollId);
-  console.log(`Crossposted poll ${pollId} to message ${messageId}`);
+  logger.info(`Crossposted poll ${pollId} to message ${messageId}`);
   return serializePoll(updated);
 }

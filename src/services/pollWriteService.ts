@@ -1,6 +1,7 @@
 import config from "@/config";
 import { prisma } from "@/client";
 import { ApiError, BadRequestError, NotFoundError } from "@/errors";
+import { moduleLogger } from "@/logger";
 import { Prisma } from "@/generated/prisma/client";
 import { getPollsFromList } from "@/services/pollReadService";
 import {
@@ -17,6 +18,8 @@ import {
   validatePublishedPoll,
 } from "@/utils/validatePoll";
 import { emitBotEvent } from "@/websocket/botEventEmitter";
+
+const logger = moduleLogger("pollWriteService");
 
 /**
  * Fields explicitly editable via /update. Everything else on the model
@@ -179,7 +182,7 @@ export async function createPolls(
 
   createdPolls.forEach((poll) => emitBotEvent("polls", "create", poll.id));
 
-  console.log(
+  logger.info(
     `Created ${createdPolls.length} polls: ${createdPolls
       .map((p) => `"${p.question}"`)
       .join(", ")}`,
@@ -268,7 +271,7 @@ export async function updatePolls(
     }),
   );
   updatedPolls.forEach((poll) => emitBotEvent("polls", "update", poll.id));
-  console.log(
+  logger.info(
     `Updated ${updatedPolls.length} polls: ${updatedPolls
       .map((p) => `"${p.question}"`)
       .join(", ")}`,
@@ -318,7 +321,7 @@ export async function deletePolls(
 
   polls.forEach((poll) => emitBotEvent("polls", "delete", poll.id));
 
-  console.log(`Deleted ${deletedPolls.count} polls with IDs: ${ids.join(", ")}`);
+  logger.info(`Deleted ${deletedPolls.count} polls with IDs: ${ids.join(", ")}`);
   return deletedPolls;
 }
 
@@ -386,7 +389,7 @@ export async function updatePollsByTag(
   );
 
   updatedPolls.forEach((poll) => emitBotEvent("polls", "update", poll.id));
-  console.log(
+  logger.info(
     `Updated ${updatedPolls.length} polls by tag ${tag}: ${updatedPolls
       .map((p) => `"${p.question}"`)
       .join(", ")}`,

@@ -1,4 +1,7 @@
 import { Response } from "express";
+import { moduleLogger } from "@/logger";
+
+const logger = moduleLogger("ApiError");
 
 export default class ApiError extends Error {
   constructor(
@@ -22,7 +25,7 @@ export default class ApiError extends Error {
     if (error instanceof ApiError) {
       error.applyToResponse(res);
     } else {
-      console.error(error);
+      logger.error(error);
       res.status(500).json({ message: "An unexpected error occurred" });
     }
   }

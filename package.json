@@ -37,6 +37,8 @@
     "memorystore": "^1.6.7",
     "passport": "^0.7.0",
     "passport-discord": "^0.1.4",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
     "prisma": "^7.10.0",
     "redis": "^5.8.2",
     "ws": "^8.21.3",

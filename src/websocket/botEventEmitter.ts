@@ -1,4 +1,5 @@
 import { getBotContext } from "@/context/botContext";
+import { moduleLogger } from "@/logger";
 
 export type BotEventTable = "polls" | "votes" | "tags";
 /**
@@ -23,6 +24,8 @@ export interface BotEventFrame {
 
 type BroadcastFn = (frame: BotEventFrame) => void;
 
+const logger = moduleLogger("botEventEmitter");
+
 let broadcast: BroadcastFn | null = null;
 
 export function setBroadcastFn(fn: BroadcastFn | null): void {
@@ -35,5 +38,6 @@ export function emitBotEvent(
   id: number,
 ): void {
   if (getBotContext()?.isBotCall === true) return;
+  logger.debug({ table, operation, id }, "bot event frame");
   broadcast?.({ table, operation, id });
 }
