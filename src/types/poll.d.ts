@@ -1,3 +1,5 @@
+import type { Tag } from "./tag";
+
 export interface Poll {
   id: number;
   question: string;
@@ -14,6 +16,7 @@ export interface Poll {
   message_id: bigint | null;
   crosspost_message_ids: bigint[];
   tag: number;
+  tag_data: Tag;
   image: string | null;
   description: string | null;
   thread_question: string | null;

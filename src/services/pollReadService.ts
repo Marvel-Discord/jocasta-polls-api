@@ -2,7 +2,10 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { prisma } from "@/client";
 import { type PollFilterUser, buildPollAuxFilters } from "@/services/pollFilters";
-import { serializePoll } from "@/services/pollSerializer";
+import {
+  POLL_WITH_VOTES_INCLUDE,
+  serializePoll,
+} from "@/services/pollSerializer";
 import type { Meta, Poll } from "@/types";
 import { OrderDir, OrderType } from "@/types";
 
@@ -14,6 +17,7 @@ interface PollFilters {
   published?: boolean;
   tag?: number;
   ids?: number[];
+  id_prefix_range?: { gte: number; lte: number };
   num?: number;
   active?: boolean;
   has_start?: boolean;
@@ -30,6 +34,9 @@ interface PollFilters {
   orderDir?: OrderDir;
   seed?: number;
 }
+
+/** Numeric id range translated from the `id_prefix` param. */
+export type IdPrefixRange = { gte: number; lte: number };
 
 /**
  * Sanitizes search input for safe use in database queries
@@ -106,6 +113,12 @@ function buildPollFilters(options: {
               },
             },
             { choices: { has: searchQuery } },
+            {
+              thread_question: {
+                contains: searchQuery,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
           ],
         }
       : {}),
@@ -151,6 +164,7 @@ export async function getPolls({
   published,
   tag,
   ids,
+  id_prefix_range,
   num,
   active,
   has_start,
@@ -178,6 +192,7 @@ export async function getPolls({
   const conjuncts = buildPollAuxFilters(
     {
       ids,
+      id_prefix_range,
       num,
       published,
       active,
@@ -212,6 +227,7 @@ export async function getPolls({
       tag,
       searchQuery,
       ids,
+      id_prefix_range,
       seed,
       now,
     });
@@ -250,6 +266,7 @@ async function handleSpecialOrderingQueries({
   tag,
   searchQuery,
   ids,
+  id_prefix_range,
   seed,
   now,
 }: {
@@ -264,6 +281,7 @@ async function handleSpecialOrderingQueries({
   tag?: number;
   searchQuery?: string;
   ids?: number[];
+  id_prefix_range?: IdPrefixRange;
   seed?: number;
   now: Date;
 }): Promise<{ data: Poll[]; randomSeed?: number }> {
@@ -293,6 +311,7 @@ async function handleSpecialOrderingQueries({
       tag,
       searchQuery,
       ids,
+      id_prefix_range,
       filters,
       limit,
       offset,
@@ -325,13 +344,7 @@ async function handleVoteOrderedQuery({
     orderBy: {
       votes: { _count: getOrderDirection(orderDir) },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   return { data: polls.map((poll) => serializePoll(poll, now)) };
@@ -346,6 +359,7 @@ async function handleRandomOrderedQuery({
   tag,
   searchQuery,
   ids,
+  id_prefix_range,
   filters,
   limit,
   offset,
@@ -357,6 +371,7 @@ async function handleRandomOrderedQuery({
   tag?: number;
   searchQuery?: string;
   ids?: number[];
+  id_prefix_range?: IdPrefixRange;
   filters: any;
   limit: number;
   offset: number;
@@ -382,12 +397,20 @@ async function handleRandomOrderedQuery({
       ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
       ${
         searchQuery
-          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}))`
+          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}) OR thread_question ILIKE ${`%${searchQuery}%`})`
           : Prisma.empty
       }
       ${
         ids?.length
           ? Prisma.sql`AND id = ANY(${ids})`
+          : Prisma.empty
+      }
+      ${
+        // The id_prefix range assumes the 5-digit id space (10000-99999
+        // generator); it is translated at parse time and composes with
+        // every other filter, including order=random.
+        id_prefix_range
+          ? Prisma.sql`AND id BETWEEN ${id_prefix_range.gte} AND ${id_prefix_range.lte}`
           : Prisma.empty
       }
       ${
@@ -407,13 +430,7 @@ async function handleRandomOrderedQuery({
     where: {
       id: { in: pollIds.map((p) => p.id) },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   // Maintain random order
@@ -450,13 +467,7 @@ async function handleTimeOrderedQuery({
       take: limit,
       skip: (page - 1) * limit,
       orderBy,
-      include: {
-        votes: {
-          select: {
-            choice: true,
-          },
-        },
-      },
+      include: POLL_WITH_VOTES_INCLUDE,
     })
     .then((polls) => polls.map((poll) => serializePoll(poll, now)));
 }
@@ -486,13 +497,7 @@ export async function getPollById(
 ): Promise<Poll | null> {
   const poll = await prisma.poll.findUnique({
     where: { id },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   if (!poll) return null;
@@ -515,13 +520,7 @@ export async function getPollsFromList(
     where: {
       id: { in: pollIds },
     },
-    include: {
-      votes: {
-        select: {
-          choice: true,
-        },
-      },
-    },
+    include: POLL_WITH_VOTES_INCLUDE,
   });
 
   return polls.map((poll) => {

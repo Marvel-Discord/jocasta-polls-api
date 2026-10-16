@@ -1,13 +1,13 @@
 import { type Poll as PollModel } from "@/generated/prisma/client";
 
-import type { Poll } from "@/types";
+import type { Poll, Tag } from "@/types";
 
 /**
  * Extended poll type that includes vote relation data for processing
  */
 export type PollWithVotes = PollModel & {
   votes: { choice: number }[];
-  tagRelation?: unknown;
+  tagRelation: Tag;
 };
 
 /**
@@ -56,10 +56,10 @@ export function computeActive(
 }
 
 /**
- * Serializes a poll with its vote relation into the API contract shape:
- * tallies votes per choice, emits start_time/end_time, and derives
- * `published` and `active` from the timestamps (the model no longer
- * stores them).
+ * Serializes a poll with its vote and tag relations into the API
+ * contract shape: tallies votes per choice, emits start_time/end_time,
+ * embeds the tag row as `tag_data`, and derives `published` and
+ * `active` from the timestamps (the model no longer stores them).
  */
 export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll {
   const { votes, start_time, end_time, tagRelation, ...restPoll } = poll;
@@ -78,5 +78,6 @@ export function serializePoll(poll: PollWithVotes, now: Date = new Date()): Poll
     total_votes: totalVotes,
     start_time,
     end_time,
+    tag_data: tagRelation,
   };
 }

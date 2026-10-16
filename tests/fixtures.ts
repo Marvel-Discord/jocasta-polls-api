@@ -95,7 +95,9 @@ export type FixtureGuildSettings = {
 //     Started, open-ended (end null) -> derives active.
 // P2: published, hidden voting (show_voting false), 2 votes, persistent tag 1
 //     (matches both live-filter OR arms: derived-active AND persistent).
-//     Started, open-ended -> derives active.
+//     Started, open-ended -> derives active. Its thread_question carries
+//     "zephyr", a word unique across all fixture text fields, so search
+//     tests can pin the thread_question arm in isolation.
 // P3: unpublished, non-persistent tag 2, scheduled (future start_time, end null), no votes -> inactive.
 // P4: published, end-scheduled (far-future end_time), non-persistent tag 2, 1 vote -> active.
 // P5: published, persistent tag 1, started AND ended in the past -> derived-inactive but live.
@@ -137,7 +139,7 @@ export const FIXTURE_POLLS: FixturePoll[] = [
     tag: 1,
     image: null,
     description: "P2 description",
-    thread_question: null,
+    thread_question: "P2 zephyr thread",
     show_question: true,
     show_options: true,
     show_voting: false,
@@ -347,6 +349,14 @@ function votesFor(pollId: number): FixtureVote[] {
 function matchIdFilter(id: number, cond: unknown): boolean {
   if (isRecord(cond) && Array.isArray(cond.in)) return cond.in.includes(id);
   if (isRecord(cond) && Array.isArray(cond.notIn)) return !cond.notIn.includes(id);
+  // id_prefix_range conjunct: numeric gte/lte window on the id column.
+  if (
+    isRecord(cond) &&
+    typeof cond.gte === "number" &&
+    typeof cond.lte === "number"
+  ) {
+    return id >= cond.gte && id <= cond.lte;
+  }
   return unsupported("poll where id", cond);
 }
 
@@ -469,6 +479,7 @@ function matchPoll(poll: FixturePoll, where: unknown): boolean {
         break;
       case "question":
       case "description":
+      case "thread_question":
         ok = matchContains(poll[key] ?? "", cond, `poll where ${key}`);
         break;
       case "choices":
@@ -542,6 +553,20 @@ function shapePollRow(poll: FixturePoll, include: unknown, select: unknown): Row
       return unsupported("poll include", include);
     }
     row.votes = votesFor(poll.id).map((vote) => ({ choice: vote.choice }));
+    // POLL_WITH_VOTES_INCLUDE's tagRelation: true — attach the full tag
+    // row. A missing FIXTURE_TAGS row mirrors the tag NOT NULL
+    // invariant: fail loudly instead of serializing tag_data: undefined.
+    const tagInclude = isRecord(include) ? include.tagRelation : undefined;
+    if (tagInclude !== undefined) {
+      if (tagInclude !== true) {
+        return unsupported("poll include tagRelation", tagInclude);
+      }
+      const tagRow = FIXTURE_TAGS.find((tag) => tag.tag === poll.tag);
+      if (tagRow === undefined) {
+        return unsupported("poll include tagRelation (no tag row)", poll.tag);
+      }
+      row.tagRelation = { ...tagRow };
+    }
   }
   return row;
 }

@@ -44,6 +44,21 @@ describe("buildPollAuxFilters", () => {
     expect(buildPollAuxFilters({ ids: [] }, NOW)).toEqual([]);
   });
 
+  it("maps id_prefix_range to a single id gte/lte conjunct", () => {
+    expect(
+      buildPollAuxFilters({ id_prefix_range: { gte: 44000, lte: 44999 } }, NOW),
+    ).toEqual([{ id: { gte: 44000, lte: 44999 } }]);
+  });
+
+  it("combines id_prefix_range with ids as separate conjuncts", () => {
+    expect(
+      buildPollAuxFilters(
+        { ids: [44123], id_prefix_range: { gte: 44000, lte: 44999 } },
+        NOW,
+      ),
+    ).toEqual([{ id: { in: [44123] } }, { id: { gte: 44000, lte: 44999 } }]);
+  });
+
   it("maps num to a single equality conjunct", () => {
     expect(buildPollAuxFilters({ num: 7 }, NOW)).toEqual([{ num: 7 }]);
   });
@@ -275,6 +290,72 @@ describe("parsePollFilterParams ids/userId conflicts", () => {
 
     expect(parsed.userId).toBe(111111111111111111n);
     expect(parsed.ids).toBeUndefined();
+  });
+});
+
+describe("parsePollFilterParams id_prefix translation", () => {
+  // Poll ids are 5-digit (10000-99999 generator): a prefix of length L
+  // pads to the decade range covering it; L=5 degenerates to the exact id.
+  it.each([
+    ["4", { gte: 40000, lte: 49999 }],
+    ["44", { gte: 44000, lte: 44999 }],
+    ["449", { gte: 44900, lte: 44999 }],
+    ["4412", { gte: 44120, lte: 44129 }],
+    ["44123", { gte: 44123, lte: 44123 }],
+  ])("translates id_prefix=%s to %o", async (prefix, range) => {
+    const parsed = await parsePollFilterParams({ id_prefix: prefix });
+
+    expect(parsed.id_prefix_range).toEqual(range);
+  });
+
+  it("rejects a non-digit id_prefix", async () => {
+    await expect(
+      parsePollFilterParams({ id_prefix: "4a12" }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    await expect(parsePollFilterParams({ id_prefix: "abc" })).rejects.toThrow();
+  });
+
+  it("rejects an empty id_prefix", async () => {
+    await expect(parsePollFilterParams({ id_prefix: "" })).rejects.toThrow();
+  });
+
+  it("rejects an id_prefix longer than 5 digits (no possible id)", async () => {
+    await expect(
+      parsePollFilterParams({ id_prefix: "123456" }),
+    ).rejects.toThrow(
+      "'id_prefix' exceeds the maximum id length of 5 digits",
+    );
+  });
+
+  it("omits id_prefix_range when id_prefix is absent", async () => {
+    const parsed = await parsePollFilterParams({ published: "true" });
+
+    expect(parsed.id_prefix_range).toBeUndefined();
+  });
+
+  it("accepts id_prefix with order=random (sampler composition)", async () => {
+    const parsed = await parsePollFilterParams({
+      order: "random",
+      id_prefix: "4",
+    });
+
+    expect(parsed.order).toBe("random");
+    expect(parsed.id_prefix_range).toEqual({ gte: 40000, lte: 49999 });
+  });
+});
+
+describe("GET /api/v1/polls id_prefix", () => {
+  it("threads the translated id range: no 5-digit fixture id matches prefix 1", async () => {
+    // Unauthenticated requests force published=true; fixture ids 1-6 all
+    // fall below the translated 10000-19999 range, so an ignored (or
+    // mis-threaded) param would return the published set instead of [].
+    const response = await request(app).get(
+      `/api/v1/polls?guildId=${GUILD}&id_prefix=1`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.meta.total).toBe(0);
   });
 });
 
