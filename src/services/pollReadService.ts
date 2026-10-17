@@ -397,7 +397,7 @@ async function handleRandomOrderedQuery({
       ${tag !== undefined ? Prisma.sql`AND tag = ${tag}` : Prisma.empty}
       ${
         searchQuery
-          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch ILIKE ${`%${searchQuery}%`}) OR thread_question ILIKE ${`%${searchQuery}%`})`
+          ? Prisma.sql`AND (question ILIKE ${`%${searchQuery}%`} OR description ILIKE ${`%${searchQuery}%`} OR EXISTS (SELECT 1 FROM unnest(choices) ch WHERE ch = ${searchQuery}) OR thread_question ILIKE ${`%${searchQuery}%`})`
           : Prisma.empty
       }
       ${
