@@ -267,6 +267,54 @@ describe("bot poll reads", () => {
     expect(response.body.data.map((poll: any) => poll.id)).toEqual([3]);
   });
 
+  it("search matches a full choice element exactly, not a substring (choices arm parity, normal path)", async () => {
+    // Prisma's `choices: { has: q }` is exact element equality: a substring
+    // of a choice must NOT match, a full choice element must. NOTE: the
+    // sanitizer lowercases the query and `has:` is case-sensitive, so the
+    // element must be lowercase to be reachable — a pre-existing quirk,
+    // identical on both paths post-parity.
+    const p1 = FIXTURE_POLLS.find((poll) => poll.id === 1)!;
+    const originalChoices = [...p1.choices];
+    p1.choices = ["matchable choice", "Other Choice"];
+    try {
+      const substring = await request(app)
+        .get(`/api/v1/bot/polls?guildId=${GUILD}&search=${encodeURIComponent("matchable")}`)
+        .set("Authorization", `Bearer ${TOKEN}`);
+      expect(substring.status).toBe(200);
+      expect(substring.body.data).toEqual([]);
+
+      const exact = await request(app)
+        .get(`/api/v1/bot/polls?guildId=${GUILD}&search=${encodeURIComponent("matchable choice")}`)
+        .set("Authorization", `Bearer ${TOKEN}`);
+      expect(exact.status).toBe(200);
+      expect(exact.body.data.map((poll: any) => poll.id)).toEqual([1]);
+    } finally {
+      p1.choices = originalChoices;
+    }
+  });
+
+  it("order=random choices arm uses exact equality, matching the Prisma path", async () => {
+    const queryRaw = vi.fn(async (_statement: unknown) => [] as { id: number }[]);
+    const prismaWithRaw = prisma as unknown as { $queryRaw?: unknown };
+    prismaWithRaw.$queryRaw = queryRaw;
+    try {
+      const response = await request(app)
+        .get(
+          `/api/v1/bot/polls?guildId=${GUILD}&order=random&search=${encodeURIComponent("P1 choice 0")}`,
+        )
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(response.status).toBe(200);
+      const statement = queryRaw.mock.calls[0][0] as {
+        text: string;
+      };
+      expect(statement.text).toContain("ch = $");
+      expect(statement.text).not.toContain("ch ILIKE");
+    } finally {
+      delete prismaWithRaw.$queryRaw;
+    }
+  });
+
   it("end-timer composition (active=true&has_end=true) returns the end-scheduled poll only", async () => {
     const response = await request(app)
       .get(`/api/v1/bot/polls?guildId=${GUILD}&active=true&has_end=true`)
